@@ -1,9 +1,11 @@
 package main
 
 import (
-	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin"
+
+	mmplugin "github.com/mattermost/mattermost/server/public/plugin"
 )
 
 func main() {
-	plugin.ClientMain(&Plugin{})
+	mmplugin.ClientMain(plugin.NewPlugin())
 }
