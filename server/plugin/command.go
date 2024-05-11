@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"fmt"
 	"unicode"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -133,6 +132,16 @@ func parseCommand(input string) (command, action string, parameters []string) {
 	return command, action, parameters
 }
 
+func (p *Plugin) postCommandResponse(args *model.CommandArgs, text string) {
+	post := &model.Post{
+		UserId:    p.BotUserID,
+		ChannelId: args.ChannelId,
+		RootId:    args.RootId,
+		Message:   text,
+	}
+	p.client.Post.SendEphemeralPost(args.UserId, post)
+}
+
 func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	cmd, action, parameters := parseCommand(args.Command)
 
@@ -140,6 +149,13 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		return &model.CommandResponse{}, nil
 	}
 
-	fmt.Println(cmd, action, parameters)
+	if f, ok := p.CommandHandlers[action]; ok {
+		message := f(c, args, parameters)
+		if message != "" {
+			p.postCommandResponse(args, message)
+		}
+		return &model.CommandResponse{}, nil
+	}
+
 	return &model.CommandResponse{}, nil
 }
