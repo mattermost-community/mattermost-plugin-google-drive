@@ -27,16 +27,12 @@ type kvStore interface {
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type Plugin struct {
 	plugin.MattermostPlugin
+
 	client *pluginapi.Client
+	store  kvStore
 
-	store kvStore
-
-	// configurationLock synchronizes access to the configuration.
 	configurationLock sync.RWMutex
-
-	// configuration is the active plugin configuration. Consult getConfiguration and
-	// setConfiguration for usage.
-	configuration *Configuration
+	configuration     *Configuration
 
 	router *mux.Router
 
@@ -47,6 +43,8 @@ type Plugin struct {
 	poster    poster.Poster
 
 	CommandHandlers map[string]CommandHandleFunc
+
+	flowManager *FlowManager
 }
 
 func (p *Plugin) ensurePluginAPIClient() {
@@ -61,6 +59,7 @@ func NewPlugin() *Plugin {
 	p.CommandHandlers = map[string]CommandHandleFunc{
 		"about": p.handleAbout,
 		"help":  p.handleHelp,
+		"setup": p.handleSetup,
 	}
 	return p
 }
@@ -73,8 +72,11 @@ func (p *Plugin) OnActivate() error {
 		return errors.New("siteURL is not set. Please set it and restart the plugin")
 	}
 
+	p.initializeAPI()
+	p.initializeTelemetry()
+
 	botID, err := p.client.Bot.EnsureBot(&model.Bot{
-		OwnerId:     manifest.Id, // Workaround to support older server version affected by https://github.com/mattermost/mattermost-server/pull/21560
+		OwnerId:     manifest.Id,
 		Username:    "drive",
 		DisplayName: "Google Drive",
 		Description: "Created by the Google Drive plugin.",
@@ -85,6 +87,8 @@ func (p *Plugin) OnActivate() error {
 	p.BotUserID = botID
 
 	p.poster = poster.NewPoster(&p.client.Post, p.BotUserID)
+
+	p.flowManager = p.NewFlowManager()
 
 	return nil
 }
