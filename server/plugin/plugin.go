@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"fmt"
 	"path/filepath"
 	"sync"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/poster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry"
 	"github.com/pkg/errors"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 )
 
 const (
@@ -45,6 +48,8 @@ type Plugin struct {
 	CommandHandlers map[string]CommandHandleFunc
 
 	flowManager *FlowManager
+
+	oauthBroker *OAuthBroker
 }
 
 func (p *Plugin) ensurePluginAPIClient() {
@@ -57,9 +62,10 @@ func (p *Plugin) ensurePluginAPIClient() {
 func NewPlugin() *Plugin {
 	p := &Plugin{}
 	p.CommandHandlers = map[string]CommandHandleFunc{
-		"about": p.handleAbout,
-		"help":  p.handleHelp,
-		"setup": p.handleSetup,
+		"about":   p.handleAbout,
+		"help":    p.handleHelp,
+		"setup":   p.handleSetup,
+		"connect": p.handleConnect,
 	}
 	return p
 }
@@ -74,6 +80,8 @@ func (p *Plugin) OnActivate() error {
 
 	p.initializeAPI()
 	p.initializeTelemetry()
+
+	p.oauthBroker = NewOAuthBroker(p.sendOAuthCompleteEvent)
 
 	botID, err := p.client.Bot.EnsureBot(&model.Bot{
 		OwnerId:     manifest.Id,
@@ -99,4 +107,26 @@ func (p *Plugin) OnDeactivate() error {
 
 func (p *Plugin) OnInstall(c *plugin.Context, event model.OnInstallEvent) error {
 	return nil
+}
+
+func (p *Plugin) getOAuthConfig() *oauth2.Config {
+	config := p.getConfiguration()
+
+	scopes := []string{
+		"https://www.googleapis.com/auth/userinfo.profile",
+		"https://www.googleapis.com/auth/userinfo.email",
+		"https://www.googleapis.com/auth/drive.file",
+		"https://www.googleapis.com/auth/drive.activity",
+		"https://www.googleapis.com/auth/documents",
+		"https://www.googleapis.com/auth/presentations",
+		"https://www.googleapis.com/auth/spreadsheets",
+	}
+
+	return &oauth2.Config{
+		ClientID:     config.GoogleOAuthClientID,
+		ClientSecret: config.GoogleOAuthClientSecret,
+		Scopes:       scopes,
+		RedirectURL:  fmt.Sprintf("%s/plugins/%s/oauth/complete", *p.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id),
+		Endpoint:     google.Endpoint,
+	}
 }
