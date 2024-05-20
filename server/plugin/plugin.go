@@ -62,10 +62,11 @@ func (p *Plugin) ensurePluginAPIClient() {
 func NewPlugin() *Plugin {
 	p := &Plugin{}
 	p.CommandHandlers = map[string]CommandHandleFunc{
-		"about":   p.handleAbout,
-		"help":    p.handleHelp,
-		"setup":   p.handleSetup,
-		"connect": p.handleConnect,
+		"about":      p.handleAbout,
+		"help":       p.handleHelp,
+		"setup":      p.handleSetup,
+		"connect":    p.handleConnect,
+		"disconnect": p.handleDisconnect,
 	}
 	return p
 }
