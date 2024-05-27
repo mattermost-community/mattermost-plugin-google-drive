@@ -67,6 +67,7 @@ func NewPlugin() *Plugin {
 		"setup":      p.handleSetup,
 		"connect":    p.handleConnect,
 		"disconnect": p.handleDisconnect,
+		"create":     p.handleCreate,
 	}
 	return p
 }

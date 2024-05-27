@@ -16,6 +16,10 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
+	"google.golang.org/api/docs/v1"
+	"google.golang.org/api/option"
+	"google.golang.org/api/sheets/v4"
+	"google.golang.org/api/slides/v1"
 )
 
 // ResponseType indicates type of response returned by api
@@ -39,6 +43,13 @@ type Context struct {
 
 type UserContext struct {
 	Context
+}
+
+type FileCreationRequest struct {
+	Name           string `json:"name"`
+	FileAccess     string `json:"file_access"`
+	Message        string `json:"message"`
+	ShareInChannel bool   `json:"share_in_channel"`
 }
 
 type APIErrorResponse struct {
@@ -137,24 +148,6 @@ func (p *Plugin) checkAuth(handler http.HandlerFunc, responseType ResponseType) 
 
 		handler(w, r)
 	}
-}
-
-func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	p.router.ServeHTTP(w, r)
-}
-
-func (p *Plugin) initializeAPI() {
-	p.router = mux.NewRouter()
-	p.router.Use(p.withRecovery)
-
-	oauthRouter := p.router.PathPrefix("/oauth").Subrouter()
-	apiRouter := p.router.PathPrefix("/api/v1").Subrouter()
-	apiRouter.Use(p.checkConfigured)
-
-	oauthRouter.HandleFunc("/connect", p.checkAuth(p.attachContext(p.connectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
-	oauthRouter.HandleFunc("/complete", p.checkAuth(p.attachContext(p.completeConnectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
 }
 
 func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -301,7 +294,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 		"Click on them!\n\n"+
 		"##### Slash Commands\n%s", strings.ReplaceAll(commandHelp, "|", "`"))
 
-	p.CreateBotDMPost(userId, message, nil)
+	p.createBotDMPost(userId, message, nil)
 
 	p.TrackUserEvent("account_connected", userId, nil)
 
@@ -332,4 +325,123 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	if _, err := w.Write([]byte(html)); err != nil {
 		p.writeAPIError(w, &APIErrorResponse{ID: "", Message: ">Completed connecting to Google. Please close this window.", StatusCode: http.StatusInternalServerError})
 	}
+}
+
+func getRawRequestAndFileCreationParams(r *http.Request) (*FileCreationRequest, *model.SubmitDialogRequest, error) {
+	var request model.SubmitDialogRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer r.Body.Close()
+
+	submission, _ := json.Marshal(request.Submission)
+	var fileCreationRequest FileCreationRequest
+	json.Unmarshal(submission, &fileCreationRequest)
+
+	return &fileCreationRequest, &request, nil
+}
+
+func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.Request) {
+	fileCreationParams, request, err := getRawRequestAndFileCreationParams(r)
+	if err != nil {
+		p.API.LogError("Failed to get fileCreationParams", "err", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+	conf := p.getOAuthConfig()
+	authToken, err := p.getGoogleUserToken(request.UserId)
+
+	var fileCreationErr error
+	createdFileId := ""
+	fileType := r.URL.Query().Get("type")
+	switch fileType {
+	case "doc":
+		{
+			srv, err := docs.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			if err != nil {
+				p.API.LogError("failed to create google docs client", "err", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			doc, err := srv.Documents.Create(&docs.Document{
+				Title: fileCreationParams.Name,
+			}).Do()
+			createdFileId = doc.DocumentId
+			fileCreationErr = err
+			break
+		}
+	case "slide":
+		{
+			srv, err := slides.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			if err != nil {
+				p.API.LogError("failed to create google slides client", "err", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			slide, err := srv.Presentations.Create(&slides.Presentation{
+				Title: fileCreationParams.Name,
+			}).Do()
+			createdFileId = slide.PresentationId
+			fileCreationErr = err
+			break
+		}
+	case "sheet":
+		{
+			srv, err := sheets.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			if err != nil {
+				p.API.LogError("failed to create google sheets client", "err", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			sheet, err := srv.Spreadsheets.Create(&sheets.Spreadsheet{
+				Properties: &sheets.SpreadsheetProperties{
+					Title: fileCreationParams.Name,
+				},
+			}).Do()
+			createdFileId = sheet.SpreadsheetId
+			fileCreationErr = err
+			break
+		}
+	}
+
+	if fileCreationErr != nil {
+		p.API.LogError("failed to create google drive file", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = p.handleFilePermissions(request.UserId, createdFileId, fileCreationParams.FileAccess, request.ChannelId)
+	if err != nil {
+		p.API.LogError("failed to modify file permissions", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = p.sendFileCreatedMessage(request.ChannelId, createdFileId, request.UserId, fileCreationParams.Message, fileCreationParams.ShareInChannel, authToken)
+	if err != nil {
+		p.API.LogError("failed to send file creation post", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	p.router.ServeHTTP(w, r)
+}
+
+func (p *Plugin) initializeAPI() {
+	p.router = mux.NewRouter()
+	p.router.Use(p.withRecovery)
+
+	oauthRouter := p.router.PathPrefix("/oauth").Subrouter()
+	apiRouter := p.router.PathPrefix("/api/v1").Subrouter()
+	apiRouter.Use(p.checkConfigured)
+
+	oauthRouter.HandleFunc("/connect", p.checkAuth(p.attachContext(p.connectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
+	oauthRouter.HandleFunc("/complete", p.checkAuth(p.attachContext(p.completeConnectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
+
+	apiRouter.HandleFunc("/create", p.attachContext(p.handleFileCreation)).Methods(http.MethodPost)
 }

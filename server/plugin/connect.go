@@ -1,11 +1,37 @@
 package plugin
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
+	"golang.org/x/oauth2"
 )
+
+func (p *Plugin) getGoogleUserToken(userId string) (*oauth2.Token, error) {
+	config := p.getConfiguration()
+
+	var encryptedToken []byte
+	err := p.client.KV.Get(getUserTokenKey(userId), &encryptedToken)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(encryptedToken) == 0 {
+		return nil, nil
+	}
+
+	decryptedToken, err := decrypt([]byte(config.EncryptionKey), string(encryptedToken))
+	if err != nil {
+		return nil, err
+	}
+
+	var oauthToken oauth2.Token
+	json.Unmarshal([]byte(decryptedToken), &oauthToken)
+
+	return &oauthToken, nil
+}
 
 func (p *Plugin) isUserConnected(userId string) (bool, error) {
 	var encryptedToken []byte
