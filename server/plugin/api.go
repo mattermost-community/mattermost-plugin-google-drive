@@ -286,7 +286,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	message := fmt.Sprintf("#### Welcome to the Mattermost Google Drive Plugin!\n"+
 		"You've connected your Mattermost account to Google account. Read about the features of this plugin below:\n\n"+
 		"##### File Creation\n"+
-		"Create Google documents, spreadsheets and presentations with /gdrive create [file type]`.\n\n"+
+		"Create Google documents, spreadsheets and presentations with /drive create [file type]`.\n\n"+
 		"##### Notifications\n"+
 		"When someone shares any files with you or comments on any file , you'll get a post here about it.\n\n"+
 		"##### File Upload\n"+
