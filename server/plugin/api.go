@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -17,6 +19,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/docs/v1"
+	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/driveactivity/v2"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
@@ -427,6 +431,174 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	}
 }
 
+func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter, r *http.Request) {
+	resourceState := r.Header.Get("X-Goog-Resource-State")
+	userID := r.URL.Query().Get("userId")
+
+	if resourceState != "change" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	resourceUri := r.Header.Get("X-Goog-Resource-Uri")
+	u, err := url.Parse(resourceUri)
+	if err != nil {
+		p.API.LogError("Failed to parse resource URI", "err", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	pageToken := u.Query().Get("pageToken")
+
+	conf := p.getOAuthConfig()
+	authToken, _ := p.getGoogleUserToken(userID)
+	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+	if err != nil {
+		p.API.LogError("Failed to create Drive service", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	changeList, err := srv.Changes.List(pageToken).Do()
+	if err != nil {
+		p.API.LogError("Failed to fetch changes", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if changeList.Changes == nil || len(changeList.Changes) == 0 {
+		p.API.LogInfo("No changes found", "pageToken", pageToken)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	lastChange := changeList.Changes[len(changeList.Changes)-1]
+
+	if lastChange.File == nil {
+		p.API.LogError("No file found", "pageToken", pageToken)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if lastChange.File.LastModifyingUser != nil && lastChange.File.LastModifyingUser.Me {
+		p.API.LogError("Owner of the file performed this action", "pageToken", pageToken)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	modifiedTime, _ := time.Parse(time.RFC3339, lastChange.File.ModifiedTime)
+	lastChangeTime, _ := time.Parse(time.RFC3339, lastChange.Time)
+	viewedByMeTime, _ := time.Parse(time.RFC3339, lastChange.File.ViewedByMeTime)
+
+	if lastChangeTime.Sub(modifiedTime) > lastChangeTime.Sub(viewedByMeTime) {
+		p.API.LogDebug("User has already opened the file after the change.")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+	if err != nil {
+		p.API.LogError("Failed to fetch changes", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	activityRes, err := activitySrv.Activity.Query(&driveactivity.QueryDriveActivityRequest{
+		PageSize: 1, ItemName: fmt.Sprintf("items/%s", lastChange.FileId),
+	}).Do()
+
+	if err != nil {
+		p.API.LogError("Failed to fetch activity", "fileId", lastChange.FileId)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if activityRes == nil || activityRes.Activities == nil || len(activityRes.Activities) == 0 {
+		p.API.LogInfo("No activities found")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	activity := activityRes.Activities[0]
+	if activity.PrimaryActionDetail.Comment != nil {
+		p.handleCommentNotifications(lastChange.FileId, userID, activity, authToken)
+	}
+	if activity.PrimaryActionDetail.PermissionChange != nil {
+		p.handleFileSharedNotification(lastChange.FileId, userID, authToken)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *http.Request) {
+	requestData, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error reading request body",
+			http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+	var request model.PostActionIntegrationRequest
+	json.Unmarshal(requestData, &request)
+	commentId := request.Context["commentId"].(string)
+	fileId := request.Context["fileId"].(string)
+	dialog := model.OpenDialogRequest{
+		TriggerId: request.TriggerId,
+		URL:       fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileId=%s&commentId=%s", *p.API.GetConfig().ServiceSettings.SiteURL, manifest.Id, fileId, commentId),
+		Dialog: model.Dialog{
+			CallbackId:     "reply",
+			Title:          "Reply to comment",
+			Elements:       []model.DialogElement{},
+			SubmitLabel:    "Reply",
+			NotifyOnCancel: false,
+			State:          request.PostId,
+		},
+	}
+
+	dialog.Dialog.Elements = append(dialog.Dialog.Elements, model.DialogElement{
+		DisplayName: "Message",
+		Name:        "message",
+		Type:        "textarea",
+	})
+
+	p.API.OpenInteractiveDialog(dialog)
+}
+
+func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *http.Request) {
+	requestData, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error reading request body",
+			http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+	var request model.SubmitDialogRequest
+	json.Unmarshal(requestData, &request)
+
+	commentId := r.URL.Query().Get("commentId")
+	fileId := r.URL.Query().Get("fileId")
+
+	conf := p.getOAuthConfig()
+	authToken, _ := p.getGoogleUserToken(request.UserId)
+	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+	if err != nil {
+		p.API.LogError("Failed to create Drive service", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	reply, err := srv.Replies.Create(fileId, commentId, &drive.Reply{
+		Content: request.Submission["message"].(string),
+	}).Fields("*").Do()
+	if err != nil {
+		p.API.LogError("Failed to create comment reply", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	p.API.CreatePost(&model.Post{
+		Message:   fmt.Sprintf("You replied to this comment with: \n> %s", reply.Content),
+		ChannelId: request.ChannelId,
+		RootId:    request.State,
+		UserId:    p.BotUserID,
+	})
+}
+
 func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	p.router.ServeHTTP(w, r)
@@ -444,4 +616,9 @@ func (p *Plugin) initializeAPI() {
 	oauthRouter.HandleFunc("/complete", p.checkAuth(p.attachContext(p.completeConnectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
 
 	apiRouter.HandleFunc("/create", p.attachContext(p.handleFileCreation)).Methods(http.MethodPost)
+
+	apiRouter.HandleFunc("/webhook", p.attachContext(p.handleDriveWatchNotifications)).Methods(http.MethodPost)
+
+	apiRouter.HandleFunc("/reply_dialog", p.attachContext(p.openCommentReplyDialog)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/reply", p.attachContext(p.handleCommentReplyDialog)).Methods(http.MethodPost)
 }

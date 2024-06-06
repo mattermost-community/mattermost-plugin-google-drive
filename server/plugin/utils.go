@@ -16,6 +16,18 @@ func getUserTokenKey(userId string) string {
 	return fmt.Sprintf("%s_token", userId)
 }
 
+func getWatchChannelDataKey(userId string) string {
+	return fmt.Sprintf("drive_change_channels-%s", userId)
+}
+
+func getInlineImage(text, imageUrl string) string {
+	return fmt.Sprintf("![%s](%s)", text, imageUrl)
+}
+
+func getHyperlink(text, url string) string {
+	return fmt.Sprintf("[%s](%s)", text, url)
+}
+
 func pad(src []byte) []byte {
 	padding := aes.BlockSize - len(src)%aes.BlockSize
 	padtext := bytes.Repeat([]byte{byte(padding)}, padding)

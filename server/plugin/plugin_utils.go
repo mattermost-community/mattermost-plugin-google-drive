@@ -1,6 +1,9 @@
 package plugin
 
-import "github.com/mattermost/mattermost/server/public/model"
+import (
+	"github.com/mattermost/mattermost/server/public/model"
+	"google.golang.org/api/drive/v3"
+)
 
 // CreateBotDMPost posts a direct message using the bot account.
 // Any error are not returned and instead logged.
@@ -37,4 +40,25 @@ func (p *Plugin) getAllChannelUsers(channelId string) []*model.User {
 		page += 1
 	}
 	return allUsers
+}
+
+func (p *Plugin) getUserDisplayName(user *drive.User) string {
+	userDisplay := ""
+	if user != nil {
+		if user.DisplayName != "" {
+			userDisplay += user.DisplayName
+		}
+		if user.EmailAddress != "" {
+			userDisplay += "(" + user.EmailAddress + ")"
+			user, _ := p.API.GetUserByEmail(user.EmailAddress)
+
+			if user != nil {
+				userDisplay += "@" + user.Username
+			}
+		}
+	}
+	if userDisplay == "" {
+		userDisplay = "Someone"
+	}
+	return userDisplay
 }

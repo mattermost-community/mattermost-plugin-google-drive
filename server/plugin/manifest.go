@@ -19,7 +19,7 @@ const manifestStr = `
   "homepage_url": "https://github.com/darkLord/mattermost-plugin-google-drive",
   "support_url": "https://github.com/mattermost/mattermost-plugin-google-drive/issues",
   "icon_path": "assets/icon.svg",
-  "version": "0.0.0+a70d997",
+  "version": "0.0.0+d1ca878",
   "min_server_version": "6.2.1",
   "server": {
     "executables": {
