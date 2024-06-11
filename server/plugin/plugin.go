@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"fmt"
 	"path/filepath"
 	"sync"
 
@@ -12,8 +11,6 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/poster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry"
 	"github.com/pkg/errors"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 )
 
 const (
@@ -105,31 +102,32 @@ func (p *Plugin) OnActivate() error {
 }
 
 func (p *Plugin) OnDeactivate() error {
+	p.oauthBroker.Close()
+	if err := p.telemetryClient.Close(); err != nil {
+		p.client.Log.Warn("Telemetry client failed to close", "error", err.Error())
+	}
 	return nil
 }
 
 func (p *Plugin) OnInstall(c *plugin.Context, event model.OnInstallEvent) error {
-	return nil
+	conf := p.getConfiguration()
+
+	// Don't start wizard if OAuth is configured
+	if conf.IsOAuthConfigured() {
+		p.client.Log.Debug("OAuth is already configured, skipping setup wizard",
+			"GoogleOAuthClientID", lastN(conf.GoogleOAuthClientID, 4),
+			"GoogleOAuthClientSecret", lastN(conf.GoogleOAuthClientSecret, 4),
+		)
+		return nil
+	}
+
+	return p.flowManager.StartSetupWizard(event.UserId)
 }
 
-func (p *Plugin) getOAuthConfig() *oauth2.Config {
-	config := p.getConfiguration()
+func (p *Plugin) OnSendDailyTelemetry() {
+	p.SendDailyTelemetry()
+}
 
-	scopes := []string{
-		"https://www.googleapis.com/auth/userinfo.profile",
-		"https://www.googleapis.com/auth/userinfo.email",
-		"https://www.googleapis.com/auth/drive.file",
-		"https://www.googleapis.com/auth/drive.activity",
-		"https://www.googleapis.com/auth/documents",
-		"https://www.googleapis.com/auth/presentations",
-		"https://www.googleapis.com/auth/spreadsheets",
-	}
-
-	return &oauth2.Config{
-		ClientID:     config.GoogleOAuthClientID,
-		ClientSecret: config.GoogleOAuthClientSecret,
-		Scopes:       scopes,
-		RedirectURL:  fmt.Sprintf("%s/plugins/%s/oauth/complete", *p.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id),
-		Endpoint:     google.Endpoint,
-	}
+func (p *Plugin) OnPluginClusterEvent(c *plugin.Context, ev model.PluginClusterEvent) {
+	p.HandleClusterEvent(ev)
 }
