@@ -15,6 +15,9 @@
             "windows-amd64": "server/dist/plugin-windows-amd64.exe"
         }
     },
+    "webapp": {
+      "bundle_path": "webapp/dist/main.js"
+    },
     "settings_schema": {
         "header": "The Google Drive plugin for Mattermost allows users to create, share files in Google drive and receive notifications for shared files and comments on files to stay up-to-date. \n \n Instructions for setup are [available here](https://github.com/mattermost-community/mattermost-plugin-google-drive#configuration).",
         "footer": "* To report an issue, make a suggestion or a contribution, [check the repository](https://github.com/darkLord19/mattermost-plugin-google-drive).",

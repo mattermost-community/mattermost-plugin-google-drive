@@ -19,7 +19,7 @@ const manifestStr = `
   "homepage_url": "https://github.com/darkLord/mattermost-plugin-google-drive",
   "support_url": "https://github.com/mattermost/mattermost-plugin-google-drive/issues",
   "icon_path": "assets/icon.svg",
-  "version": "0.0.0+d1ca878",
+  "version": "0.0.0+1ee111c",
   "min_server_version": "6.2.1",
   "server": {
     "executables": {
@@ -30,6 +30,9 @@ const manifestStr = `
       "windows-amd64": "server/dist/plugin-windows-amd64.exe"
     },
     "executable": ""
+  },
+  "webapp": {
+    "bundle_path": "webapp/dist/main.js"
   },
   "settings_schema": {
     "header": "The Google Drive plugin for Mattermost allows users to create, share files in Google drive and receive notifications for shared files and comments on files to stay up-to-date. \n \n Instructions for setup are [available here](https://github.com/mattermost-community/mattermost-plugin-google-drive#configuration).",

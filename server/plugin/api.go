@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -599,6 +600,106 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	})
 }
 
+func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Request) {
+	var request model.SubmitDialogRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		p.API.LogError("Failed to decode SubmitDialogRequest", "err", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	fileId := request.Submission["fileId"].(string)
+	fileInfo, appErr := p.API.GetFileInfo(fileId)
+	if appErr != nil {
+		p.API.LogError("unable to fetch file info", "err", err, "fileId", fileId)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	fileReader, appErr := p.API.GetFile(fileId)
+	if appErr != nil {
+		p.API.LogError("unable to fetch file data", "err", err, "fileId", fileId)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	ctx := context.Background()
+	conf := p.getOAuthConfig()
+	authToken, _ := p.getGoogleUserToken(c.UserID)
+	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+	if err != nil {
+		p.API.LogError("failed to create drive service", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	_, err = srv.Files.Create(&drive.File{
+		Name: fileInfo.Name,
+	}).Media(bytes.NewReader(fileReader)).Do()
+	if err != nil {
+		p.API.LogError("failed to upload file", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	p.API.SendEphemeralPost(c.UserID, &model.Post{
+		Message:   "Successfully uploaded file in Google Drive.",
+		ChannelId: request.ChannelId,
+	})
+}
+
+func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http.Request) {
+	var request model.SubmitDialogRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		p.API.LogError("Failed to decode SubmitDialogRequest", "err", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	postId := request.State
+	post, _ := p.API.GetPost(postId)
+
+	ctx := context.Background()
+	conf := p.getOAuthConfig()
+
+	authToken, _ := p.getGoogleUserToken(c.UserID)
+	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+	if err != nil {
+		p.API.LogError("failed to create drive service", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	fileIds := post.FileIds
+	for _, fileId := range fileIds {
+		fileInfo, appErr := p.API.GetFileInfo(fileId)
+		if appErr != nil {
+			p.API.LogError("unable to get file info", "err", err, "fileId", fileId)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		fileReader, appErr := p.API.GetFile(fileId)
+		if appErr != nil {
+			p.API.LogError("unable to get file", "err", err, "fileId", fileId)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		srv.Files.Create(&drive.File{
+			Name: fileInfo.Name,
+		}).Media(bytes.NewReader(fileReader)).Do()
+	}
+	p.API.SendEphemeralPost(c.UserID, &model.Post{
+		Message:   "Successfully uploaded all files in Google Drive.",
+		ChannelId: request.ChannelId,
+	})
+}
+
 func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	p.router.ServeHTTP(w, r)
@@ -621,4 +722,7 @@ func (p *Plugin) initializeAPI() {
 
 	apiRouter.HandleFunc("/reply_dialog", p.attachContext(p.openCommentReplyDialog)).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/reply", p.attachContext(p.handleCommentReplyDialog)).Methods(http.MethodPost)
+
+	apiRouter.HandleFunc("/upload_file", p.attachContext(p.handleFileUpload)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/upload_all", p.attachContext(p.handleAllFilesUpload)).Methods(http.MethodPost)
 }
