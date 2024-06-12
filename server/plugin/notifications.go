@@ -181,7 +181,7 @@ func (p *Plugin) handleFileSharedNotification(fileID, userID string, authToken *
 	})
 }
 
-func (p *Plugin) startDriveWatchChannel(userId, resourceId, channelId string) error {
+func (p *Plugin) startDriveWatchChannel(userId string) error {
 	ctx := context.Background()
 	conf := p.getOAuthConfig()
 	authToken, err := p.getGoogleUserToken(userId)
@@ -222,12 +222,6 @@ func (p *Plugin) startDriveWatchChannel(userId, resourceId, channelId string) er
 			"userId": userId,
 		},
 	}
-	if channelId != "" {
-		requestChannel.Id = channelId
-	}
-	if resourceId != "" {
-		requestChannel.ResourceId = resourceId
-	}
 
 	channel, err := srv.Changes.Watch(startPageToken.StartPageToken, &requestChannel).Do()
 	if err != nil {
@@ -239,6 +233,7 @@ func (p *Plugin) startDriveWatchChannel(userId, resourceId, channelId string) er
 		ChannelId:  channel.Id,
 		ResourceId: channel.ResourceId,
 		Expiration: channel.Expiration,
+		MMUserId:   userId,
 	}
 	_, err = p.client.KV.Set(getWatchChannelDataKey(userId), channelData)
 	if err != nil {
@@ -249,7 +244,7 @@ func (p *Plugin) startDriveWatchChannel(userId, resourceId, channelId string) er
 }
 
 func (p *Plugin) startDriveActivityNotifications(userId string) string {
-	err := p.startDriveWatchChannel(userId, "", "")
+	err := p.startDriveWatchChannel(userId)
 	if err != nil {
 		return "Something went wrong while starting Drive activity notifications. Please contact your organization admin for support."
 	}
@@ -257,17 +252,17 @@ func (p *Plugin) startDriveActivityNotifications(userId string) string {
 	return "Successfully enabled drive activity notifications."
 }
 
-func (p *Plugin) stopDriveActivityNotifications(userID string) string {
+func (p *Plugin) stopDriveActivityNotifications(userId string) string {
 	var watchChannelData WatchChannelData
-	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
+	err := p.client.KV.Get(getWatchChannelDataKey(userId), &watchChannelData)
 	if err != nil {
-		p.API.LogError("failed to get drive change channel data", "userId", userID)
+		p.API.LogError("failed to get drive change channel data", "userId", userId)
 		return "Something went wrong while stopping Drive activity notifications. Please contact your organization admin for support."
 	}
 
 	ctx := context.Background()
 	conf := p.getOAuthConfig()
-	authToken, _ := p.getGoogleUserToken(userID)
+	authToken, _ := p.getGoogleUserToken(userId)
 	srv, _ := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 
 	err = srv.Channels.Stop(&drive.Channel{

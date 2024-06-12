@@ -3,6 +3,7 @@ package plugin
 import (
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/mattermost/mattermost/server/public/model"
@@ -47,6 +48,8 @@ type Plugin struct {
 	flowManager *FlowManager
 
 	oauthBroker *OAuthBroker
+
+	channelRefreshJob *time.Ticker
 }
 
 func (p *Plugin) ensurePluginAPIClient() {
@@ -68,6 +71,53 @@ func NewPlugin() *Plugin {
 		"notifications": p.handleNotifications,
 	}
 	return p
+}
+
+func (p *Plugin) refreshDriveWatchChannels() {
+	page := 0
+	perPage := 100
+
+	worker := func(channels <-chan WatchChannelData, wg *sync.WaitGroup) {
+		defer wg.Done()
+		for channel := range channels {
+			p.startDriveWatchChannel(channel.MMUserId)
+			p.stopDriveActivityNotifications(channel.MMUserId)
+		}
+	}
+
+	var wg sync.WaitGroup
+	channels := make(chan WatchChannelData)
+	for i := 1; i <= 5; i++ {
+		wg.Add(1)
+		go worker(channels, &wg)
+	}
+
+	for {
+		keys, err := p.client.KV.ListKeys(page, perPage, pluginapi.WithPrefix("drive_change_channels-"))
+		if err != nil {
+			p.API.LogError("Failed to list keys", "err", err)
+			break
+		}
+
+		if len(keys) == 0 {
+			break
+		}
+
+		for _, key := range keys {
+			var watchChannelData WatchChannelData
+			err = p.client.KV.Get(key, &watchChannelData)
+			if err != nil {
+				continue
+			}
+			if time.Until(time.Unix(watchChannelData.Expiration, 0)) < 24*time.Hour {
+				channels <- watchChannelData
+			}
+		}
+
+		page++
+	}
+	close(channels)
+	wg.Wait()
 }
 
 func (p *Plugin) OnActivate() error {
@@ -98,6 +148,13 @@ func (p *Plugin) OnActivate() error {
 
 	p.flowManager = p.NewFlowManager()
 
+	p.channelRefreshJob = time.NewTicker(12 * time.Hour)
+	go func() {
+		for range p.channelRefreshJob.C {
+			p.refreshDriveWatchChannels()
+		}
+	}()
+
 	return nil
 }
 
@@ -106,6 +163,7 @@ func (p *Plugin) OnDeactivate() error {
 	if err := p.telemetryClient.Close(); err != nil {
 		p.client.Log.Warn("Telemetry client failed to close", "error", err.Error())
 	}
+	p.channelRefreshJob.Stop()
 	return nil
 }
 
