@@ -59,18 +59,27 @@ func (p *Plugin) ensurePluginAPIClient() {
 	}
 }
 
-func NewPlugin() *Plugin {
-	p := &Plugin{}
-	p.CommandHandlers = map[string]CommandHandleFunc{
-		"about":         p.handleAbout,
-		"help":          p.handleHelp,
-		"setup":         p.handleSetup,
-		"connect":       p.handleConnect,
-		"disconnect":    p.handleDisconnect,
-		"create":        p.handleCreate,
-		"notifications": p.handleNotifications,
+func (p *Plugin) setDefaultConfiguration() error {
+	config := p.getConfiguration()
+
+	changed, err := config.setDefaults()
+	if err != nil {
+		return err
 	}
-	return p
+
+	if changed {
+		configMap, err := config.ToMap()
+		if err != nil {
+			return err
+		}
+
+		err = p.client.Configuration.SavePluginConfig(configMap)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p *Plugin) refreshDriveWatchChannels() {
@@ -80,8 +89,8 @@ func (p *Plugin) refreshDriveWatchChannels() {
 	worker := func(channels <-chan WatchChannelData, wg *sync.WaitGroup) {
 		defer wg.Done()
 		for channel := range channels {
-			p.startDriveWatchChannel(channel.MMUserId)
-			p.stopDriveActivityNotifications(channel.MMUserId)
+			_ = p.startDriveWatchChannel(channel.MMUserID)
+			p.stopDriveActivityNotifications(channel.MMUserID)
 		}
 	}
 
@@ -126,6 +135,11 @@ func (p *Plugin) OnActivate() error {
 	siteURL := p.client.Configuration.GetConfig().ServiceSettings.SiteURL
 	if siteURL == nil || *siteURL == "" {
 		return errors.New("siteURL is not set. Please set it and restart the plugin")
+	}
+
+	err := p.setDefaultConfiguration()
+	if err != nil {
+		return errors.Wrap(err, "failed to set default configuration")
 	}
 
 	p.initializeAPI()
@@ -190,4 +204,18 @@ func (p *Plugin) OnSendDailyTelemetry() {
 
 func (p *Plugin) OnPluginClusterEvent(c *plugin.Context, ev model.PluginClusterEvent) {
 	p.HandleClusterEvent(ev)
+}
+
+func NewPlugin() *Plugin {
+	p := &Plugin{}
+	p.CommandHandlers = map[string]CommandHandleFunc{
+		"about":         p.handleAbout,
+		"help":          p.handleHelp,
+		"setup":         p.handleSetup,
+		"connect":       p.handleConnect,
+		"disconnect":    p.handleDisconnect,
+		"create":        p.handleCreate,
+		"notifications": p.handleNotifications,
+	}
+	return p
 }

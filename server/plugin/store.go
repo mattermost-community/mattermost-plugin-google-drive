@@ -6,7 +6,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func (p *Plugin) storeGoogleUserToken(userId string, token *oauth2.Token) error {
+func (p *Plugin) storeGoogleUserToken(userID string, token *oauth2.Token) error {
 	config := p.getConfiguration()
 
 	jsonToken, err := json.Marshal(token)
@@ -19,7 +19,7 @@ func (p *Plugin) storeGoogleUserToken(userId string, token *oauth2.Token) error 
 		return err
 	}
 
-	if _, err := p.client.KV.Set(getUserTokenKey(userId), []byte(encryptedToken)); err != nil {
+	if _, err := p.client.KV.Set(getUserTokenKey(userID), []byte(encryptedToken)); err != nil {
 		return err
 	}
 

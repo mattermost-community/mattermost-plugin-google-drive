@@ -12,16 +12,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getUserTokenKey(userId string) string {
-	return fmt.Sprintf("%s_token", userId)
+func getUserTokenKey(userID string) string {
+	return fmt.Sprintf("%s_token", userID)
 }
 
-func getWatchChannelDataKey(userId string) string {
-	return fmt.Sprintf("drive_change_channels-%s", userId)
+func getWatchChannelDataKey(userID string) string {
+	return fmt.Sprintf("drive_change_channels-%s", userID)
 }
 
-func getInlineImage(text, imageUrl string) string {
-	return fmt.Sprintf("![%s](%s)", text, imageUrl)
+func getInlineImage(text, imageURL string) string {
+	return fmt.Sprintf("![%s](%s)", text, imageURL)
 }
 
 func getHyperlink(text, url string) string {

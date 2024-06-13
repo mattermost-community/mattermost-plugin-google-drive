@@ -14,8 +14,8 @@ export default class Plugin {
     ) {
         registry.registerPostDropdownMenuAction(
             'Upload file to Google Drive',
-            async (postId: string) => {
-                const fileInfos = await Client4.getFileInfosForPost(postId);
+            async (postID: string) => {
+                const fileInfos = await Client4.getFileInfosForPost(postID);
                 if (fileInfos.length === 0) {
                     sendEphemeralPost(
                         'Selected post doesn\'t have any files to be uploaded',
@@ -31,7 +31,7 @@ export default class Plugin {
                             {
                                 display_name: 'Select the files you\'d like to upload to Google Drive',
                                 type: 'select',
-                                name: 'fileId',
+                                name: 'fileID',
                                 options: fileInfos.map((fileInfo) => ({
                                     text: fileInfo.name,
                                     value: fileInfo.id,
@@ -41,7 +41,7 @@ export default class Plugin {
                         ],
                         submit_label: 'Submit',
                         notify_on_cancel: true,
-                        state: postId,
+                        state: postID,
                     },
                 };
 
@@ -52,8 +52,8 @@ export default class Plugin {
 
         registry.registerPostDropdownMenuAction(
             'Upload all files to Google Drive',
-            async (postId: string) => {
-                const fileInfos = await Client4.getFileInfosForPost(postId);
+            async (postID: string) => {
+                const fileInfos = await Client4.getFileInfosForPost(postID);
                 if (fileInfos.length === 0) {
                     sendEphemeralPost(
                         'Selected post doesn\'t have any files to be uploaded',
@@ -67,7 +67,7 @@ export default class Plugin {
                         title: 'Upload all files Google Drive',
                         submit_label: 'Submit',
                         notify_on_cancel: true,
-                        state: postId,
+                        state: postID,
                     },
                 };
 

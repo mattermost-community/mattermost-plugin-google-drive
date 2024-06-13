@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -15,7 +16,7 @@ import (
 	"google.golang.org/api/option"
 )
 
-func (p *Plugin) sendFileCreatedMessage(channelId, fileId, userId, message string, shareInChannel bool, authToken *oauth2.Token) error {
+func (p *Plugin) sendFileCreatedMessage(channelID, fileID, userID, message string, shareInChannel bool, authToken *oauth2.Token) error {
 	ctx := context.Background()
 	conf := p.getOAuthConfig()
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
@@ -23,17 +24,17 @@ func (p *Plugin) sendFileCreatedMessage(channelId, fileId, userId, message strin
 		p.API.LogError("failed to create drive client", "err", err)
 		return err
 	}
-	file, err := srv.Files.Get(fileId).Fields("webViewLink", "id", "owners", "permissions", "name", "iconLink", "thumbnailLink", "createdTime").Do()
+	file, err := srv.Files.Get(fileID).Fields("webViewLink", "id", "owners", "permissions", "name", "iconLink", "thumbnailLink", "createdTime").Do()
 	if err != nil {
-		p.API.LogError("failed to fetch  file", "err", err, "fileId", err)
+		p.API.LogError("failed to fetch  file", "err", err, "fileID", err)
 		return err
 	}
 
 	createdTime, _ := time.Parse(time.RFC3339, file.CreatedTime)
 	if shareInChannel {
-		p.API.CreatePost(&model.Post{
+		post := model.Post{
 			UserId:    p.BotUserID,
-			ChannelId: channelId,
+			ChannelId: channelID,
 			Message:   message,
 			Props: map[string]any{
 				"attachments": []any{map[string]any{
@@ -45,9 +46,14 @@ func (p *Plugin) sendFileCreatedMessage(channelId, fileId, userId, message strin
 					"footer_icon": file.IconLink,
 				}},
 			},
-		})
+		}
+		_, appErr := p.API.CreatePost(&post)
+		if appErr != nil {
+			p.API.LogWarn("failed to create post", "err", err, "channelID", post.ChannelId, "rootId", post.RootId, "message", post.Message)
+			return errors.New(appErr.DetailedError)
+		}
 	} else {
-		p.createBotDMPost(userId, "", map[string]any{
+		p.createBotDMPost(userID, "", map[string]any{
 			"attachments": []any{map[string]any{
 				"pretext":     fmt.Sprintf("You created a new file with following message:\n > %s", message),
 				"title":       file.Name,
@@ -60,7 +66,7 @@ func (p *Plugin) sendFileCreatedMessage(channelId, fileId, userId, message strin
 	return nil
 }
 
-func (p *Plugin) handleFilePermissions(userId string, fileId string, fileAccess string, channelId string) error {
+func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess string, channelID string) error {
 	permissions := make([]*drive.Permission, 0)
 	switch fileAccess {
 	case "all_view":
@@ -80,7 +86,7 @@ func (p *Plugin) handleFilePermissions(userId string, fileId string, fileAccess 
 		})
 	case "members_view":
 		{
-			users := p.getAllChannelUsers(channelId)
+			users := p.getAllChannelUsers(channelID)
 			for _, user := range users {
 				if !user.IsBot {
 					permissions = append(permissions, &drive.Permission{
@@ -93,7 +99,7 @@ func (p *Plugin) handleFilePermissions(userId string, fileId string, fileAccess 
 		}
 	case "members_comment":
 		{
-			users := p.getAllChannelUsers(channelId)
+			users := p.getAllChannelUsers(channelID)
 			for _, user := range users {
 				if !user.IsBot {
 					permissions = append(permissions, &drive.Permission{
@@ -106,7 +112,7 @@ func (p *Plugin) handleFilePermissions(userId string, fileId string, fileAccess 
 		}
 	case "members_edit":
 		{
-			users := p.getAllChannelUsers(channelId)
+			users := p.getAllChannelUsers(channelID)
 			for _, user := range users {
 				if !user.IsBot {
 					permissions = append(permissions, &drive.Permission{
@@ -122,7 +128,7 @@ func (p *Plugin) handleFilePermissions(userId string, fileId string, fileAccess 
 	ctx := context.Background()
 	conf := p.getOAuthConfig()
 
-	authToken, _ := p.getGoogleUserToken(userId)
+	authToken, _ := p.getGoogleUserToken(userID)
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
 		p.API.LogError("failed to create drive client", "err", err)
@@ -130,9 +136,9 @@ func (p *Plugin) handleFilePermissions(userId string, fileId string, fileAccess 
 	}
 
 	for _, permission := range permissions {
-		_, err := srv.Permissions.Create(fileId, permission).Do()
+		_, err := srv.Permissions.Create(fileID, permission).Do()
 		if err != nil {
-			p.API.LogError("something went wrong while updating permissions for file", "err", err, "fileId", fileId)
+			p.API.LogError("something went wrong while updating permissions for file", "err", err, "fileID", fileID)
 			return err
 		}
 	}
@@ -217,6 +223,10 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 		Optional:    true,
 	})
 
-	p.API.OpenInteractiveDialog(dialog)
+	appErr := p.API.OpenInteractiveDialog(dialog)
+	if appErr != nil {
+		p.API.LogWarn("failed to open interactive dialog", "err", appErr.DetailedError)
+		return "Failed to open file creation dialog"
+	}
 	return ""
 }

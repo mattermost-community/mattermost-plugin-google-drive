@@ -39,7 +39,6 @@ func (p *Plugin) sendMessageToCluster(id string, v interface{}) {
 
 func (p *Plugin) HandleClusterEvent(ev model.PluginClusterEvent) {
 	switch ev.Id {
-
 	case oauthCompleteEventID:
 		var event OAuthCompleteEvent
 		if err := json.Unmarshal(ev.Data, &event); err != nil {

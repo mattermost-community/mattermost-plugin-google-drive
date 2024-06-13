@@ -44,7 +44,7 @@ func (c *Configuration) ToMap() (map[string]interface{}, error) {
 	return out, nil
 }
 
-func (c *Configuration) setDefaults(isCloud bool) (bool, error) {
+func (c *Configuration) setDefaults() (bool, error) {
 	changed := false
 
 	if c.EncryptionKey == "" {
@@ -82,7 +82,6 @@ func (c *Configuration) Clone() *Configuration {
 
 // IsValid checks if all needed fields are set.
 func (c *Configuration) IsValid() error {
-
 	if c.GoogleOAuthClientID == "" {
 		return errors.New("must have a google oauth client id")
 	}

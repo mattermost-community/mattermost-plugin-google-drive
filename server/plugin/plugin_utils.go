@@ -27,17 +27,17 @@ func (p *Plugin) createBotDMPost(userID, message string, props map[string]any) {
 	}
 }
 
-func (p *Plugin) getAllChannelUsers(channelId string) []*model.User {
+func (p *Plugin) getAllChannelUsers(channelID string) []*model.User {
 	page := 0
 	perPage := 100
 	allUsers := make([]*model.User, 0)
 	for {
-		users, appErr := p.API.GetUsers(&model.UserGetOptions{InChannelId: channelId, Page: page, PerPage: perPage})
+		users, appErr := p.API.GetUsers(&model.UserGetOptions{InChannelId: channelID, Page: page, PerPage: perPage})
 		if appErr != nil || len(users) == 0 {
 			break
 		}
 		allUsers = append(allUsers, users...)
-		page += 1
+		page++
 	}
 	return allUsers
 }

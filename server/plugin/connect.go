@@ -9,11 +9,11 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func (p *Plugin) getGoogleUserToken(userId string) (*oauth2.Token, error) {
+func (p *Plugin) getGoogleUserToken(userID string) (*oauth2.Token, error) {
 	config := p.getConfiguration()
 
 	var encryptedToken []byte
-	err := p.client.KV.Get(getUserTokenKey(userId), &encryptedToken)
+	err := p.client.KV.Get(getUserTokenKey(userID), &encryptedToken)
 	if err != nil {
 		return nil, err
 	}
@@ -28,14 +28,14 @@ func (p *Plugin) getGoogleUserToken(userId string) (*oauth2.Token, error) {
 	}
 
 	var oauthToken oauth2.Token
-	json.Unmarshal([]byte(decryptedToken), &oauthToken)
+	err = json.Unmarshal([]byte(decryptedToken), &oauthToken)
 
-	return &oauthToken, nil
+	return &oauthToken, err
 }
 
-func (p *Plugin) isUserConnected(userId string) (bool, error) {
+func (p *Plugin) isUserConnected(userID string) (bool, error) {
 	var encryptedToken []byte
-	err := p.client.KV.Get(getUserTokenKey(userId), &encryptedToken)
+	err := p.client.KV.Get(getUserTokenKey(userID), &encryptedToken)
 	if err != nil {
 		return false, err
 	}

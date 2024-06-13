@@ -255,9 +255,9 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 		return
 	}
 
-	userId := strings.Split(state, "_")[1]
+	userID := strings.Split(state, "_")[1]
 
-	if userId != authedUserID {
+	if userID != authedUserID {
 		rErr = errors.New("not authorized, incorrect user")
 		http.Error(w, rErr.Error(), http.StatusUnauthorized)
 		return
@@ -272,15 +272,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 		return
 	}
 
-	if err != nil {
-		c.Log.WithError(err).Warnf("Can't exchange state")
-
-		rErr = errors.Wrap(err, "Failed to exchange oauth code into token")
-		http.Error(w, rErr.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err = p.storeGoogleUserToken(userId, token); err != nil {
+	if err = p.storeGoogleUserToken(userID, token); err != nil {
 		c.Log.WithError(err).Warnf("Can't store user token")
 
 		rErr = errors.Wrap(err, "Unable to connect user to Google account")
@@ -299,9 +291,9 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 		"Click on them!\n\n"+
 		"##### Slash Commands\n%s", strings.ReplaceAll(commandHelp, "|", "`"))
 
-	p.createBotDMPost(userId, message, nil)
+	p.createBotDMPost(userID, message, nil)
 
-	p.TrackUserEvent("account_connected", userId, nil)
+	p.TrackUserEvent("account_connected", userID, nil)
 
 	p.client.Frontend.PublishWebSocketEvent(
 		"google_connect",
@@ -309,7 +301,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 			"connected":        true,
 			"google_client_id": config.GoogleOAuthClientID,
 		},
-		&model.WebsocketBroadcast{UserId: userId},
+		&model.WebsocketBroadcast{UserId: userID},
 	)
 
 	html := `
@@ -340,9 +332,15 @@ func getRawRequestAndFileCreationParams(r *http.Request) (*FileCreationRequest, 
 	}
 	defer r.Body.Close()
 
-	submission, _ := json.Marshal(request.Submission)
+	submission, err := json.Marshal(request.Submission)
+	if err != nil {
+		return nil, nil, err
+	}
 	var fileCreationRequest FileCreationRequest
-	json.Unmarshal(submission, &fileCreationRequest)
+	err = json.Unmarshal(submission, &fileCreationRequest)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return &fileCreationRequest, &request, nil
 }
@@ -360,54 +358,54 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	authToken, err := p.getGoogleUserToken(request.UserId)
 
 	var fileCreationErr error
-	createdFileId := ""
+	createdFileID := ""
 	fileType := r.URL.Query().Get("type")
 	switch fileType {
 	case "doc":
 		{
-			srv, err := docs.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-			if err != nil {
+			srv, dErr := docs.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			if dErr != nil {
 				p.API.LogError("failed to create google docs client", "err", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			doc, err := srv.Documents.Create(&docs.Document{
+			doc, dErr := srv.Documents.Create(&docs.Document{
 				Title: fileCreationParams.Name,
 			}).Do()
-			createdFileId = doc.DocumentId
-			fileCreationErr = err
+			createdFileID = doc.DocumentId
+			fileCreationErr = dErr
 			break
 		}
 	case "slide":
 		{
-			srv, err := slides.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-			if err != nil {
+			srv, dErr := slides.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			if dErr != nil {
 				p.API.LogError("failed to create google slides client", "err", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			slide, err := srv.Presentations.Create(&slides.Presentation{
+			slide, dErr := srv.Presentations.Create(&slides.Presentation{
 				Title: fileCreationParams.Name,
 			}).Do()
-			createdFileId = slide.PresentationId
-			fileCreationErr = err
+			createdFileID = slide.PresentationId
+			fileCreationErr = dErr
 			break
 		}
 	case "sheet":
 		{
-			srv, err := sheets.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-			if err != nil {
+			srv, dErr := sheets.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			if dErr != nil {
 				p.API.LogError("failed to create google sheets client", "err", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			sheet, err := srv.Spreadsheets.Create(&sheets.Spreadsheet{
+			sheet, dErr := srv.Spreadsheets.Create(&sheets.Spreadsheet{
 				Properties: &sheets.SpreadsheetProperties{
 					Title: fileCreationParams.Name,
 				},
 			}).Do()
-			createdFileId = sheet.SpreadsheetId
-			fileCreationErr = err
+			createdFileID = sheet.SpreadsheetId
+			fileCreationErr = dErr
 			break
 		}
 	}
@@ -418,13 +416,13 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	err = p.handleFilePermissions(request.UserId, createdFileId, fileCreationParams.FileAccess, request.ChannelId)
+	err = p.handleFilePermissions(request.UserId, createdFileID, fileCreationParams.FileAccess, request.ChannelId)
 	if err != nil {
 		p.API.LogError("failed to modify file permissions", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	err = p.sendFileCreatedMessage(request.ChannelId, createdFileId, request.UserId, fileCreationParams.Message, fileCreationParams.ShareInChannel, authToken)
+	err = p.sendFileCreatedMessage(request.ChannelId, createdFileID, request.UserId, fileCreationParams.Message, fileCreationParams.ShareInChannel, authToken)
 	if err != nil {
 		p.API.LogError("failed to send file creation post", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -434,15 +432,15 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 
 func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter, r *http.Request) {
 	resourceState := r.Header.Get("X-Goog-Resource-State")
-	userID := r.URL.Query().Get("userId")
+	userID := r.URL.Query().Get("userID")
 
 	if resourceState != "change" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	resourceUri := r.Header.Get("X-Goog-Resource-Uri")
-	u, err := url.Parse(resourceUri)
+	resourceURI := r.Header.Get("X-Goog-Resource-Uri")
+	u, err := url.Parse(resourceURI)
 	if err != nil {
 		p.API.LogError("Failed to parse resource URI", "err", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -506,7 +504,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	}).Do()
 
 	if err != nil {
-		p.API.LogError("Failed to fetch activity", "fileId", lastChange.FileId)
+		p.API.LogError("Failed to fetch activity", "fileID", lastChange.FileId)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -530,18 +528,24 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *http.Request) {
 	requestData, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Error reading request body",
-			http.StatusInternalServerError)
+		p.API.LogError("failed to read request body", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	defer r.Body.Close()
 	var request model.PostActionIntegrationRequest
-	json.Unmarshal(requestData, &request)
-	commentId := request.Context["commentId"].(string)
-	fileId := request.Context["fileId"].(string)
+	err = json.Unmarshal(requestData, &request)
+	if err != nil {
+		p.API.LogError("failed to parse request body", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	commentID := request.Context["commentID"].(string)
+	fileID := request.Context["fileID"].(string)
 	dialog := model.OpenDialogRequest{
 		TriggerId: request.TriggerId,
-		URL:       fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileId=%s&commentId=%s", *p.API.GetConfig().ServiceSettings.SiteURL, manifest.Id, fileId, commentId),
+		URL:       fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s", *p.API.GetConfig().ServiceSettings.SiteURL, manifest.Id, fileID, commentID),
 		Dialog: model.Dialog{
 			CallbackId:     "reply",
 			Title:          "Reply to comment",
@@ -558,46 +562,63 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 		Type:        "textarea",
 	})
 
-	p.API.OpenInteractiveDialog(dialog)
+	appErr := p.API.OpenInteractiveDialog(dialog)
+	if appErr != nil {
+		p.API.LogWarn("Failed to open interactive dialog", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
 func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *http.Request) {
 	requestData, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Error reading request body",
-			http.StatusInternalServerError)
+		p.API.LogError("failed to read request body", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	defer r.Body.Close()
-	var request model.SubmitDialogRequest
-	json.Unmarshal(requestData, &request)
 
-	commentId := r.URL.Query().Get("commentId")
-	fileId := r.URL.Query().Get("fileId")
+	var request model.SubmitDialogRequest
+	err = json.Unmarshal(requestData, &request)
+	if err != nil {
+		p.API.LogError("failed to parse request body", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	commentID := r.URL.Query().Get("commentID")
+	fileID := r.URL.Query().Get("fileID")
 
 	conf := p.getOAuthConfig()
 	authToken, _ := p.getGoogleUserToken(request.UserId)
 	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create Drive service", "err", err)
+		p.API.LogError("failed to create Drive service", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	reply, err := srv.Replies.Create(fileId, commentId, &drive.Reply{
+	reply, err := srv.Replies.Create(fileID, commentID, &drive.Reply{
 		Content: request.Submission["message"].(string),
 	}).Fields("*").Do()
 	if err != nil {
-		p.API.LogError("Failed to create comment reply", "err", err)
+		p.API.LogError("failed to create comment reply", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	p.API.CreatePost(&model.Post{
+	post := model.Post{
 		Message:   fmt.Sprintf("You replied to this comment with: \n> %s", reply.Content),
 		ChannelId: request.ChannelId,
 		RootId:    request.State,
 		UserId:    p.BotUserID,
-	})
+	}
+	_, appErr := p.API.CreatePost(&post)
+	if appErr != nil {
+		p.API.LogWarn("failed to create post", "err", err, "channelID", post.ChannelId, "rootId", post.RootId, "message", post.Message)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
 func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -610,17 +631,17 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 	}
 	defer r.Body.Close()
 
-	fileId := request.Submission["fileId"].(string)
-	fileInfo, appErr := p.API.GetFileInfo(fileId)
+	fileID := request.Submission["fileID"].(string)
+	fileInfo, appErr := p.API.GetFileInfo(fileID)
 	if appErr != nil {
-		p.API.LogError("unable to fetch file info", "err", err, "fileId", fileId)
+		p.API.LogError("unable to fetch file info", "err", err, "fileID", fileID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	fileReader, appErr := p.API.GetFile(fileId)
+	fileReader, appErr := p.API.GetFile(fileID)
 	if appErr != nil {
-		p.API.LogError("unable to fetch file data", "err", err, "fileId", fileId)
+		p.API.LogError("unable to fetch file data", "err", err, "fileID", fileID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -660,8 +681,13 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	}
 	defer r.Body.Close()
 
-	postId := request.State
-	post, _ := p.API.GetPost(postId)
+	postID := request.State
+	post, appErr := p.API.GetPost(postID)
+	if appErr != nil {
+		p.API.LogError("Failed to get post", "err", err, "postID", postID)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	ctx := context.Background()
 	conf := p.getOAuthConfig()
@@ -675,24 +701,29 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	}
 
 	fileIds := post.FileIds
-	for _, fileId := range fileIds {
-		fileInfo, appErr := p.API.GetFileInfo(fileId)
+	for _, fileID := range fileIds {
+		fileInfo, appErr := p.API.GetFileInfo(fileID)
 		if appErr != nil {
-			p.API.LogError("unable to get file info", "err", err, "fileId", fileId)
+			p.API.LogError("unable to get file info", "err", err, "fileID", fileID)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		fileReader, appErr := p.API.GetFile(fileId)
+		fileReader, appErr := p.API.GetFile(fileID)
 		if appErr != nil {
-			p.API.LogError("unable to get file", "err", err, "fileId", fileId)
+			p.API.LogError("unable to get file", "err", err, "fileID", fileID)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		srv.Files.Create(&drive.File{
+		_, err := srv.Files.Create(&drive.File{
 			Name: fileInfo.Name,
 		}).Media(bytes.NewReader(fileReader)).Do()
+		if err != nil {
+			p.API.LogError("failed to upload file", "err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 	p.API.SendEphemeralPost(c.UserID, &model.Post{
 		Message:   "Successfully uploaded all files in Google Drive.",
