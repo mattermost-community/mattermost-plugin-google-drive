@@ -148,6 +148,8 @@ func (p *Plugin) OnActivate() error {
 
 	p.flowManager = p.NewFlowManager()
 
+	// google drive watch api doesn't allow indefinite expiry of watch channels
+	// so we need to refresh(close old channel and start new one) them before they get expired
 	p.channelRefreshJob = time.NewTicker(12 * time.Hour)
 	go func() {
 		for range p.channelRefreshJob.C {
