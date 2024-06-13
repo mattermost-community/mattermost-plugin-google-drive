@@ -9,6 +9,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
+	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/poster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry"
 	"github.com/pkg/errors"
@@ -49,7 +50,7 @@ type Plugin struct {
 
 	oauthBroker *OAuthBroker
 
-	channelRefreshJob *time.Ticker
+	channelRefreshJob *cluster.Job
 }
 
 func (p *Plugin) ensurePluginAPIClient() {
@@ -164,13 +165,10 @@ func (p *Plugin) OnActivate() error {
 
 	// google drive watch api doesn't allow indefinite expiry of watch channels
 	// so we need to refresh(close old channel and start new one) them before they get expired
-	p.channelRefreshJob = time.NewTicker(12 * time.Hour)
-	go func() {
-		for range p.channelRefreshJob.C {
-			p.refreshDriveWatchChannels()
-		}
-	}()
-
+	p.channelRefreshJob, err = cluster.Schedule(p.API, "refreshDriveWatchChannelsJob", cluster.MakeWaitForInterval(12*time.Hour), p.refreshDriveWatchChannels)
+	if err != nil {
+		return errors.Wrap(err, "failed to create a scheduled recurring job to refresh watch channels")
+	}
 	return nil
 }
 
@@ -179,7 +177,9 @@ func (p *Plugin) OnDeactivate() error {
 	if err := p.telemetryClient.Close(); err != nil {
 		p.client.Log.Warn("Telemetry client failed to close", "error", err.Error())
 	}
-	p.channelRefreshJob.Stop()
+	if err := p.channelRefreshJob.Close(); err != nil {
+		p.client.Log.Warn("Channel refresh job failed to close", "error", err.Error())
+	}
 	return nil
 }
 
