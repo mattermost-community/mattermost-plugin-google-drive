@@ -458,7 +458,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	changeList, err := srv.Changes.List(pageToken).Do()
+	changeList, err := srv.Changes.List(pageToken).Fields("*").Do()
 	if err != nil {
 		p.API.LogError("Failed to fetch changes", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
