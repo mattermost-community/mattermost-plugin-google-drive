@@ -7,7 +7,7 @@ import (
 
 func (p *Plugin) handleDisconnect(c *plugin.Context, args *model.CommandArgs, _ []string) string {
 	var encryptedToken []byte
-	p.client.KV.Get(getUserTokenKey(args.UserId), &encryptedToken)
+	_ = p.client.KV.Get(getUserTokenKey(args.UserId), &encryptedToken)
 	if len(encryptedToken) == 0 {
 		return "There is no google account connected to your mattermost account."
 	}
