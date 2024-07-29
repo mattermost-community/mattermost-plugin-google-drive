@@ -668,6 +668,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 	p.API.SendEphemeralPost(c.UserID, &model.Post{
 		Message:   "Successfully uploaded file in Google Drive.",
 		ChannelId: request.ChannelId,
+		UserId:    p.BotUserID,
 	})
 }
 
@@ -728,6 +729,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	p.API.SendEphemeralPost(c.UserID, &model.Post{
 		Message:   "Successfully uploaded all files in Google Drive.",
 		ChannelId: request.ChannelId,
+		UserId:    p.BotUserID,
 	})
 }
 

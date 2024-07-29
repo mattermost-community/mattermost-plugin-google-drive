@@ -289,8 +289,22 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	return nil
 }
 
+func isWatchChannelDataValid(watchChannelData WatchChannelData) bool {
+	return watchChannelData.ChannelID != "" && watchChannelData.Expiration != 0 && watchChannelData.MMUserID != "" && watchChannelData.ResourceID != ""
+}
+
 func (p *Plugin) startDriveActivityNotifications(userID string) string {
-	err := p.startDriveWatchChannel(userID)
+	var watchChannelData WatchChannelData
+	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
+	if err != nil {
+		return "Something went wrong while starting Drive activity notifications. Please contact your organization admin for support."
+	}
+
+	if isWatchChannelDataValid(watchChannelData) {
+		return "Drive activity notifications are already enabled for you."
+	}
+
+	err = p.startDriveWatchChannel(userID)
 	if err != nil {
 		return "Something went wrong while starting Drive activity notifications. Please contact your organization admin for support."
 	}
@@ -304,6 +318,10 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	if err != nil {
 		p.API.LogError("failed to get drive change channel data", "userID", userID)
 		return "Something went wrong while stopping Drive activity notifications. Please contact your organization admin for support."
+	}
+
+	if !isWatchChannelDataValid(watchChannelData) {
+		return "Drive activity notifications are not enabled for you."
 	}
 
 	ctx := context.Background()
