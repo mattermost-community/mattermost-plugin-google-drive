@@ -150,7 +150,7 @@ func (p *Plugin) OnActivate() error {
 
 	botID, err := p.client.Bot.EnsureBot(&model.Bot{
 		OwnerId:     manifest.Id,
-		Username:    "drive",
+		Username:    "google-drive",
 		DisplayName: "Google Drive",
 		Description: "Created by the Google Drive plugin.",
 	}, pluginapi.ProfileImagePath(filepath.Join("assets", "profile.png")))
