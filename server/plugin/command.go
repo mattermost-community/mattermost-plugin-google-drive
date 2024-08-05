@@ -15,7 +15,7 @@ const commandDescription = "Available commands: connect, disconnect, create, not
 
 func getAutocompleteData(config *Configuration) *model.AutocompleteData {
 	if !config.IsOAuthConfigured() {
-		drive := model.NewAutocompleteData("drive", "[command]", "Available commands: setup, about")
+		drive := model.NewAutocompleteData("google-drive", "[command]", "Available commands: setup, about")
 
 		setup := model.NewAutocompleteData("setup", "", "Set up the Google Drive plugin")
 		setup.RoleID = model.SystemAdminRoleId
@@ -27,7 +27,7 @@ func getAutocompleteData(config *Configuration) *model.AutocompleteData {
 		return drive
 	}
 
-	drive := model.NewAutocompleteData("drive", "[command]", commandDescription)
+	drive := model.NewAutocompleteData("google-drive", "[command]", commandDescription)
 
 	connect := model.NewAutocompleteData("connect", "", "Connect to your Google account")
 	drive.AddCommand(connect)
@@ -72,7 +72,7 @@ func (p *Plugin) getCommand(config *Configuration) (*model.Command, error) {
 	}
 
 	return &model.Command{
-		Trigger:              "drive",
+		Trigger:              "google-drive",
 		AutoComplete:         true,
 		AutoCompleteDesc:     commandDescription,
 		AutoCompleteHint:     "[command]",
@@ -145,7 +145,7 @@ func (p *Plugin) postCommandResponse(args *model.CommandArgs, text string) {
 func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	cmd, action, parameters := parseCommand(args.Command)
 
-	if cmd != "/drive" {
+	if cmd != "/google-drive" {
 		return &model.CommandResponse{}, nil
 	}
 

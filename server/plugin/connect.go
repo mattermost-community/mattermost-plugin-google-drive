@@ -47,7 +47,7 @@ func (p *Plugin) isUserConnected(userID string) (bool, error) {
 
 func (p *Plugin) handleConnect(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
 	if connected, err := p.isUserConnected(args.UserId); connected && err == nil {
-		return "You have already connected your Google account. If you want to reconnect then disconnect the account first using `/drive disconnect`."
+		return "You have already connected your Google account. If you want to reconnect then disconnect the account first using `/google-drive disconnect`."
 	}
 	siteURL := p.client.Configuration.GetConfig().ServiceSettings.SiteURL
 	if siteURL == nil {
