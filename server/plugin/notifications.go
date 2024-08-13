@@ -333,7 +333,6 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	if err != nil {
 		p.API.LogError("failed to delete drive watch channel data", "err", err)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
-
 	}
 
 	err = srv.Channels.Stop(&drive.Channel{
