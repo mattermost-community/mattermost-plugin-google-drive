@@ -458,13 +458,13 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	}
 	changeList, err := srv.Changes.List(pageToken).Fields("*").Do()
 	if err != nil {
-		p.API.LogError("Failed to fetch changes", "err", err)
+		p.API.LogError("Failed to fetch google drive changes", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if changeList.Changes == nil || len(changeList.Changes) == 0 {
-		p.API.LogInfo("No changes found", "pageToken", pageToken)
+		p.API.LogInfo("No google drive changes found", "pageToken", pageToken)
 		w.WriteHeader(http.StatusOK)
 		return
 	}

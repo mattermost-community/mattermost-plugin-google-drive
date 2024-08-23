@@ -106,7 +106,7 @@ func cancelButton() flow.Button {
 func (fm *FlowManager) stepCancel(command string) flow.Step {
 	return flow.NewStep(stepCancel).
 		Terminal().
-		WithText(fmt.Sprintf("Google integration setup has stopped. Restart setup later by running `/google-drive %s`. Learn more about the plugin [here](%s).", command, manifest.HomepageURL)).
+		WithText(fmt.Sprintf("Google Drive integration setup has stopped. Restart setup later by running `/google-drive %s`. Learn more about the plugin [here](%s).", command, manifest.HomepageURL)).
 		WithColor(flow.ColorDanger)
 }
 
@@ -337,7 +337,7 @@ func (fm *FlowManager) trackStartAnnouncementWizard(userID string) {
 func (fm *FlowManager) stepAnnouncementQuestion() flow.Step {
 	defaultMessage := "Hi team,\n" +
 		"\n" +
-		"We've set up the Mattermost Google Drive plugin to enable documents creation, file uploads and file activity notifications in Mattermost. To get started, run the `/google-drive connect` slash command from any channel within Mattermost to connect your Google account. See the [documentation](https://github.com/darkLord19/mattermost-plugin-google-drive/) for details on using the Google plugin."
+		"We've set up the Mattermost Google Drive plugin to enable document creation, file uploads and file activity notifications in Mattermost. To get started, run the `/google-drive connect` slash command from any channel within Mattermost to connect your Google account. See the [documentation](https://github.com/darkLord19/mattermost-plugin-google-drive/) for details on using the Google Drive plugin."
 
 	return flow.NewStep(stepAnnouncementQuestion).
 		WithText("Want to let your team know?").

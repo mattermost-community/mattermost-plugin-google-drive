@@ -49,9 +49,9 @@ After your System Admin has configured the Google Drive plugin, run `/google-dri
 
 |                           |                                             |
 | ------------------------- | ------------------------------------------- |
-| `/google-drive create doc`    | Create and share a new google document.     |
-| `/google-drive create sheet`  | Create and share a new google spreadsheet.  |
-| `/google-drive create slide`  | Create and share a new google presentation. |
+| `/google-drive create doc`    | Create and share a new Google document.     |
+| `/google-drive create sheet`  | Create and share a new Google spreadsheet.  |
+| `/google-drive create slide`  | Create and share a new Google presentation. |
 
 #### Subscribe yourself to notifications
 
