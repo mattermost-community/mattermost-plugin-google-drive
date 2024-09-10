@@ -30,10 +30,10 @@ func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, 
 		p.API.LogWarn("there is no legacyCommentId present in the activity")
 		return
 	}
-	commentID := activity.Targets[0].FileComment.LegacyCommentId
-	comment, err := dSrv.Comments.Get(userID, commentID).Fields("*").Do()
+	commentID := activity.Targets[0].FileComment.LegacyDiscussionId
+	comment, err := dSrv.Comments.Get(fileID, commentID).Fields("*").IncludeDeleted(true).Do()
 	if err != nil {
-		p.API.LogError("failed to get comment", "err", err, "commentID", commentID)
+		p.API.LogError("failed to get comment by legacyDiscussionId", "err", err, "commentID", commentID)
 		return
 	}
 	quotedValue := ""
@@ -79,7 +79,7 @@ func (p *Plugin) handleReplyAdded(dSrv *drive.Service, fileID, userID string, ac
 	commentID := activity.Targets[0].FileComment.LegacyDiscussionId
 	comment, err := dSrv.Comments.Get(fileID, commentID).Fields("*").IncludeDeleted(true).Do()
 	if err != nil {
-		p.API.LogError("failed to get comment", "err", err, "commentID", commentID)
+		p.API.LogError("failed to get comment by legacyDiscussionId", "err", err, "commentID", commentID)
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
@@ -130,7 +130,7 @@ func (p *Plugin) handleResolvedComment(dSrv *drive.Service, fileID, userID strin
 	commentID := activity.Targets[0].FileComment.LegacyCommentId
 	comment, err := dSrv.Comments.Get(fileID, commentID).Fields("*").IncludeDeleted(true).Do()
 	if err != nil {
-		p.API.LogError("failed to get comment", "err", err, "commentID", commentID)
+		p.API.LogError("failed to get comment by legacyCommentId", "err", err, "commentID", commentID)
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
@@ -148,7 +148,7 @@ func (p *Plugin) handleReopenedComment(dSrv *drive.Service, fileID, userID strin
 	commentID := activity.Targets[0].FileComment.LegacyDiscussionId
 	comment, err := dSrv.Comments.Get(fileID, commentID).Fields("*").IncludeDeleted(true).Do()
 	if err != nil {
-		p.API.LogError("failed to get comment", "err", err, "commentID", commentID)
+		p.API.LogError("failed to get comment by legacyDiscussionId", "err", err, "commentID", commentID)
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
@@ -297,19 +297,19 @@ func (p *Plugin) startDriveActivityNotifications(userID string) string {
 	var watchChannelData WatchChannelData
 	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
 	if err != nil {
-		return "Something went wrong while starting Drive activity notifications. Please contact your organization admin for support."
+		return "Something went wrong while starting Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
 	if isWatchChannelDataValid(watchChannelData) {
-		return "Drive activity notifications are already enabled for you."
+		return "Google Drive activity notifications are already enabled for you."
 	}
 
 	err = p.startDriveWatchChannel(userID)
 	if err != nil {
-		return "Something went wrong while starting Drive activity notifications. Please contact your organization admin for support."
+		return "Something went wrong while starting Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
-	return "Successfully enabled drive activity notifications."
+	return "Successfully enabled Google Drive activity notifications."
 }
 
 func (p *Plugin) stopDriveActivityNotifications(userID string) string {
@@ -317,17 +317,23 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
 	if err != nil {
 		p.API.LogError("failed to get drive change channel data", "userID", userID)
-		return "Something went wrong while stopping Drive activity notifications. Please contact your organization admin for support."
+		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
 	if !isWatchChannelDataValid(watchChannelData) {
-		return "Drive activity notifications are not enabled for you."
+		return "Google Drive activity notifications are not enabled for you."
 	}
 
 	ctx := context.Background()
 	conf := p.getOAuthConfig()
 	authToken, _ := p.getGoogleUserToken(userID)
 	srv, _ := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+
+	err = p.client.KV.Delete(getWatchChannelDataKey(userID))
+	if err != nil {
+		p.API.LogError("failed to delete drive watch channel data", "err", err)
+		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
+	}
 
 	err = srv.Channels.Stop(&drive.Channel{
 		Id:         watchChannelData.ChannelID,
@@ -336,10 +342,9 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 
 	if err != nil {
 		p.API.LogError("failed to stop drive change channel", "err", err)
-		return "Something went wrong while stopping Drive activity notifications. Please contact your organization admin for support."
 	}
 
-	return "Successfully disabled drive activity notifications."
+	return "Successfully disabled Google Drive activity notifications."
 }
 
 func (p *Plugin) handleNotifications(c *plugin.Context, args *model.CommandArgs, parameters []string) string {

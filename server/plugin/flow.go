@@ -106,7 +106,7 @@ func cancelButton() flow.Button {
 func (fm *FlowManager) stepCancel(command string) flow.Step {
 	return flow.NewStep(stepCancel).
 		Terminal().
-		WithText(fmt.Sprintf("Google integration setup has stopped. Restart setup later by running `/drive %s`. Learn more about the plugin [here](%s).", command, manifest.HomepageURL)).
+		WithText(fmt.Sprintf("Google Drive integration setup has stopped. Restart setup later by running `/google-drive %s`. Learn more about the plugin [here](%s).", command, manifest.HomepageURL)).
 		WithColor(flow.ColorDanger)
 }
 
@@ -215,9 +215,9 @@ You must first register the Mattermost Google Drive Plugin as an authorized OAut
 			"6. Go back to **APIs & Services** menu.\n"+
 			"7. Create a new Client. Select the option **Credentials**, and on the menu bar, select **Create credentials**, a dropdown menu will be displayed, then, select **OAuth Client ID** option.\n"+
 			"8. Then, a select input will ask the type of Application type that will be used, select **Web application**, then, fill the form, and on **Authorized redirect URIs** add the following URI.\n"+
-			"	- Redirect URI: `%s/oauth2/complete`\n"+
+			"	- Redirect URI: `%s/plugins/%s/oauth/complete`\n"+
 			"9. After the Client has been configured, on the main page of **Credentials**, on the submenu **OAuth 2.0 Client IDs** will be displayed the new Client and the info can be accessible whenever you need it.",
-		fmt.Sprintf("%s/plugins/%s", *fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id),
+		*fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id,
 	)
 
 	return flow.NewStep(stepOAuthInfo).
@@ -306,7 +306,7 @@ func (fm *FlowManager) submitOAuthConfig(f *flow.Flow, submitted map[string]inte
 
 func (fm *FlowManager) stepOAuthConnect() flow.Step {
 	connectPretext := "##### :white_check_mark: Connect your Google account"
-	connectURL := fmt.Sprintf("%s/oauth/connect", fmt.Sprintf("%s/plugins/%s", *fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id))
+	connectURL := fmt.Sprintf("%s/plugins/%s/oauth/connect", *fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id)
 	connectText := fmt.Sprintf("Go [here](%s) to connect your account.", connectURL)
 	return flow.NewStep(stepOAuthConnect).
 		WithText(connectText).
@@ -337,7 +337,7 @@ func (fm *FlowManager) trackStartAnnouncementWizard(userID string) {
 func (fm *FlowManager) stepAnnouncementQuestion() flow.Step {
 	defaultMessage := "Hi team,\n" +
 		"\n" +
-		"We've set up the Mattermost Google Drive plugin to enable documents creation, file uploads and file activity notifications in Mattermost. To get started, run the `/drive connect` slash command from any channel within Mattermost to connect your Google account. See the [documentation](https://github.com/darkLord19/mattermost-plugin-google-drive/) for details on using the Google plugin."
+		"We've set up the Mattermost Google Drive plugin to enable document creation, file uploads and file activity notifications in Mattermost. To get started, run the `/google-drive connect` slash command from any channel within Mattermost to connect your Google account. See the [documentation](https://github.com/darkLord19/mattermost-plugin-google-drive/) for details on using the Google Drive plugin."
 
 	return flow.NewStep(stepAnnouncementQuestion).
 		WithText("Want to let your team know?").

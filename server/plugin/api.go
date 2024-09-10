@@ -283,7 +283,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	message := fmt.Sprintf("#### Welcome to the Mattermost Google Drive Plugin!\n"+
 		"You've connected your Mattermost account to Google account. Read about the features of this plugin below:\n\n"+
 		"##### File Creation\n"+
-		"Create Google documents, spreadsheets and presentations with /drive create [file type]`.\n\n"+
+		"Create Google documents, spreadsheets and presentations with /google-drive create [file type]`.\n\n"+
 		"##### Notifications\n"+
 		"When someone shares any files with you or comments on any file , you'll get a post here about it.\n\n"+
 		"##### File Upload\n"+
@@ -452,19 +452,19 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	authToken, _ := p.getGoogleUserToken(userID)
 	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create Drive service", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	changeList, err := srv.Changes.List(pageToken).Fields("*").Do()
 	if err != nil {
-		p.API.LogError("Failed to fetch changes", "err", err)
+		p.API.LogError("Failed to fetch google drive changes", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if changeList.Changes == nil || len(changeList.Changes) == 0 {
-		p.API.LogInfo("No changes found", "pageToken", pageToken)
+		p.API.LogInfo("No google drive changes found", "pageToken", pageToken)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -495,7 +495,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
 	if err != nil {
-		p.API.LogError("Failed to fetch changes", "err", err)
+		p.API.LogError("Failed to fetch google drive changes", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -504,7 +504,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	}).Do()
 
 	if err != nil {
-		p.API.LogError("Failed to fetch activity", "fileID", lastChange.FileId)
+		p.API.LogError("Failed to fetch google drive activity", "fileID", lastChange.FileId)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

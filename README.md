@@ -36,29 +36,29 @@ This plugin allows you to integrate Google Drive to your Mattermost instance, le
 
 ### Slash commands
 
-After your System Admin has configured the Google Drive plugin, run `/drive connect` in a Mattermost channel to connect your Mattermost and Google accounts.
+After your System Admin has configured the Google Drive plugin, run `/google-drive connect` in a Mattermost channel to connect your Mattermost and Google accounts.
 
 #### Connect to your Google account
 
 |                        |                                                 |
 | -----------------------| ------------------------------------------------|
-| `/drive connect`       | Connect your Mattermost account to Google.      |
-| `/drive disconnect`    | Disconnect your Mattermost account from Google. |
+| `/google-drive connect`       | Connect your Mattermost account to Google.      |
+| `/google-drive disconnect`    | Disconnect your Mattermost account from Google. |
 
 #### Create Google Drive files
 
 |                           |                                             |
 | ------------------------- | ------------------------------------------- |
-| `/drive create doc`    | Create and share a new google document.     |
-| `/drive create sheet`  | Create and share a new google spreadsheet.  |
-| `/drive create slide`  | Create and share a new google presentation. |
+| `/google-drive create doc`    | Create and share a new Google document.     |
+| `/google-drive create sheet`  | Create and share a new Google spreadsheet.  |
+| `/google-drive create slide`  | Create and share a new Google presentation. |
 
 #### Subscribe yourself to notifications
 
 |                                         |                                               |
 | ----------------------------------------| --------------------------------------------- |
-| `/drive notifications start`            | Enable Google Drive activity notifications.   |
-| `/drive notifications stop`             | Disable Google Drive activity notifications.  |
+| `/google-drive notifications start`            | Enable Google Drive activity notifications.   |
+| `/google-drive notifications stop`             | Disable Google Drive activity notifications.  |
 
 #### Post menu bindings
 `Upload file to Google drive`:: This option is available in any post to upload any attached files directly to your google drive. You will be prompted with a dropdown to choose the attachment you want to upload.
