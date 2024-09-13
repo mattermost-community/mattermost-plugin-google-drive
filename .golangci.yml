@@ -6,7 +6,7 @@ linters-settings:
   gofmt:
     simplify: true
   goimports:
-    local-prefixes: github.com/darkLord19/mattermost-plugin-google-drive
+    local-prefixes: github.com/mattermost/mattermost-plugin-google-drive
   govet:
     check-shadowing: true
     enable-all: true
