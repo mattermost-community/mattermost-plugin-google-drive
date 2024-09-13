@@ -1,4 +1,4 @@
-module github.com/darkLord19/mattermost-plugin-google-drive
+module github.com/mattermost/mattermost-plugin-google-drive
 
 go 1.21
 
