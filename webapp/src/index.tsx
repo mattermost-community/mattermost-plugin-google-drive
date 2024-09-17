@@ -1,6 +1,7 @@
 import {Store, Action} from 'redux';
-import {GlobalState} from '@mattermost/types/lib/store';
-import {Client4} from 'mattermost-redux/client';
+import {GlobalState} from 'mattermost-redux/types/store';
+import {getPost} from 'mattermost-redux/selectors/entities/posts';
+import {makeGetFilesForPost} from 'mattermost-redux/selectors/entities/files';
 
 import manifest from '@/manifest';
 import {PluginRegistry} from '@/types/mattermost-webapp';
@@ -12,10 +13,13 @@ export default class Plugin {
         registry: PluginRegistry,
         store: Store<GlobalState, Action<Record<string, unknown>>>,
     ) {
+        const getFilesForPost = makeGetFilesForPost();
+
         registry.registerPostDropdownMenuAction(
             'Upload file to Google Drive',
-            async (postID: string) => {
-                const fileInfos = await Client4.getFileInfosForPost(postID);
+            (postID: string) => {
+                const state = store.getState();
+                const fileInfos = getFilesForPost(state, postID);
                 if (fileInfos.length === 0) {
                     sendEphemeralPost(
                         'Selected post doesn\'t have any files to be uploaded',
@@ -48,13 +52,25 @@ export default class Plugin {
                 // Open the modal
                 window.openInteractiveDialog(modal);
             },
+            (postID: string) => {
+                const state = store.getState();
+                const post = getPost(state, postID);
+                if (!post) {
+                    return false;
+                }
+                if (!post.file_ids || post.file_ids.length === 0) {
+                    return false;
+                }
+                return true;
+            },
         );
 
         registry.registerPostDropdownMenuAction(
             'Upload all files to Google Drive',
-            async (postID: string) => {
-                const fileInfos = await Client4.getFileInfosForPost(postID);
-                if (fileInfos.length === 0) {
+            (postID: string) => {
+                const state = store.getState();
+                const post = getPost(state, postID);
+                if (post.file_ids && post.file_ids.length === 0) {
                     sendEphemeralPost(
                         'Selected post doesn\'t have any files to be uploaded',
                     )(store.dispatch, store.getState);
@@ -72,6 +88,17 @@ export default class Plugin {
                 };
 
                 window.openInteractiveDialog(modal);
+            },
+            (postID: string) => {
+                const state = store.getState();
+                const post = getPost(state, postID);
+                if (!post) {
+                    return false;
+                }
+                if (!post.file_ids || post.file_ids.length < 2) {
+                    return false;
+                }
+                return true;
             },
         );
     }
