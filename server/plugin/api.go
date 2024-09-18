@@ -138,14 +138,14 @@ func (p *Plugin) writeAPIError(w http.ResponseWriter, err *APIErrorResponse) {
 	b, _ := json.Marshal(err)
 	w.WriteHeader(err.StatusCode)
 	if _, err := w.Write(b); err != nil {
-		p.client.Log.Warn("can't write api error http response", "err", err.Error())
+		p.client.Log.Warn("Can't write api error http response", "err", err.Error())
 	}
 }
 
 func (p *Plugin) writeInteractiveDialogError(w http.ResponseWriter, errResponse DialogErrorResponse) {
 	w.WriteHeader(errResponse.StatusCode)
 	if err := json.NewEncoder(w).Encode(errResponse); err != nil {
-		p.client.Log.Warn("can't write api error http response", "err", err.Error())
+		p.client.Log.Warn("Can't write api error http response", "err", err.Error())
 	}
 }
 
