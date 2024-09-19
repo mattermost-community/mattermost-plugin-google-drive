@@ -144,6 +144,9 @@ func (p *Plugin) writeAPIError(w http.ResponseWriter, err *APIErrorResponse) {
 
 func (p *Plugin) writeInteractiveDialogError(w http.ResponseWriter, errResponse DialogErrorResponse) {
 	w.WriteHeader(errResponse.StatusCode)
+	if errResponse.Error == "" {
+		errResponse.Error = "Something went wrong, please contact your system administrator"
+	}
 	if err := json.NewEncoder(w).Encode(errResponse); err != nil {
 		p.client.Log.Warn("Can't write api error http response", "err", err.Error())
 	}
@@ -362,7 +365,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	fileCreationParams, request, err := getRawRequestAndFileCreationParams(r)
 	if err != nil {
 		p.API.LogError("Failed to get fileCreationParams", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to get file creation parameters", StatusCode: http.StatusBadRequest})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
 
@@ -371,7 +374,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	authToken, err := p.getGoogleUserToken(request.UserId)
 	if err != nil {
 		p.API.LogError("Failed to get google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to get google user token", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -384,37 +387,41 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 			srv, dErr := docs.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 			if dErr != nil {
 				p.API.LogError("Failed to create google docs client", "err", dErr)
-				p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to create google docs client", StatusCode: http.StatusInternalServerError})
+				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
 			doc, dErr := srv.Documents.Create(&docs.Document{
 				Title: fileCreationParams.Name,
 			}).Do()
+			if dErr != nil {
+				fileCreationErr = dErr
+				break
+			}
 			createdFileID = doc.DocumentId
-			fileCreationErr = dErr
-			break
 		}
 	case "slide":
 		{
 			srv, dErr := slides.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 			if dErr != nil {
 				p.API.LogError("Failed to create google slides client", "err", dErr)
-				p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to create google slides client", StatusCode: http.StatusInternalServerError})
+				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
 			slide, dErr := srv.Presentations.Create(&slides.Presentation{
 				Title: fileCreationParams.Name,
 			}).Do()
+			if dErr != nil {
+				fileCreationErr = dErr
+				break
+			}
 			createdFileID = slide.PresentationId
-			fileCreationErr = dErr
-			break
 		}
 	case "sheet":
 		{
 			srv, dErr := sheets.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 			if dErr != nil {
 				p.API.LogError("Failed to create google sheets client", "err", dErr)
-				p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to create google sheets client", StatusCode: http.StatusInternalServerError})
+				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
 			sheet, dErr := srv.Spreadsheets.Create(&sheets.Spreadsheet{
@@ -422,28 +429,30 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 					Title: fileCreationParams.Name,
 				},
 			}).Do()
+			if dErr != nil {
+				fileCreationErr = dErr
+				break
+			}
 			createdFileID = sheet.SpreadsheetId
-			fileCreationErr = dErr
-			break
 		}
 	}
 
 	if fileCreationErr != nil {
 		p.API.LogError("Failed to create google drive file", "err", fileCreationErr)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to create google drive file", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
 	err = p.handleFilePermissions(request.UserId, createdFileID, fileCreationParams.FileAccess, request.ChannelId)
 	if err != nil {
 		p.API.LogError("Failed to modify file permissions", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to modify file permissions", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 	err = p.sendFileCreatedMessage(request.ChannelId, createdFileID, request.UserId, fileCreationParams.Message, fileCreationParams.ShareInChannel, authToken)
 	if err != nil {
 		p.API.LogError("Failed to send file creation post", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to send file creation post", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 }
@@ -470,7 +479,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	authToken, err := p.getGoogleUserToken(userID)
 	if err != nil {
 		p.API.LogError("Failed to get google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to get google user token", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -598,7 +607,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	requestData, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.API.LogError("Failed to read request body", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to read request body", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 	defer r.Body.Close()
@@ -607,7 +616,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	err = json.Unmarshal(requestData, &request)
 	if err != nil {
 		p.API.LogError("Failed to parse request body", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to parse request body", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -618,13 +627,13 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	authToken, err := p.getGoogleUserToken(request.UserId)
 	if err != nil {
 		p.API.LogError("Failed to get google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to get google user token", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
 	if err != nil {
 		p.API.LogError("Failed to create Google Drive service", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to create Google Drive service", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 	reply, err := srv.Replies.Create(fileID, commentID, &drive.Reply{
@@ -632,7 +641,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	}).Fields("*").Do()
 	if err != nil {
 		p.API.LogError("Failed to create comment reply", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to create comment reply", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -655,7 +664,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		p.API.LogError("Failed to decode SubmitDialogRequest", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to decode request", StatusCode: http.StatusBadRequest})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
 	defer r.Body.Close()
@@ -664,14 +673,14 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 	fileInfo, appErr := p.API.GetFileInfo(fileID)
 	if appErr != nil {
 		p.API.LogError("Unable to fetch file info", "err", appErr, "fileID", fileID)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Unable to fetch file info", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
 	fileReader, appErr := p.API.GetFile(fileID)
 	if appErr != nil {
 		p.API.LogError("Unable to fetch file data", "err", appErr, "fileID", fileID)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Unable to fetch file data", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -680,14 +689,14 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 	authToken, err := p.getGoogleUserToken(c.UserID)
 	if err != nil {
 		p.API.LogError("Failed to get google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to get google user token", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
 		p.API.LogError("Failed to create Google Drive service", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to create Google Drive service", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -696,7 +705,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 	}).Media(bytes.NewReader(fileReader)).Do()
 	if err != nil {
 		p.API.LogError("Failed to upload file", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to upload file", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -712,7 +721,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		p.API.LogError("Failed to decode SubmitDialogRequest", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to decode request", StatusCode: http.StatusBadRequest})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
 	defer r.Body.Close()
@@ -721,7 +730,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	post, appErr := p.API.GetPost(postID)
 	if appErr != nil {
 		p.API.LogError("Failed to get post", "err", appErr, "postID", postID)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to get post", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -731,14 +740,14 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	authToken, err := p.getGoogleUserToken(c.UserID)
 	if err != nil {
 		p.API.LogError("Failed to get google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to get google user token", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
 		p.API.LogError("Failed to create Google Drive service", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to create Google Drive service", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -747,14 +756,14 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 		fileInfo, appErr := p.API.GetFileInfo(fileID)
 		if appErr != nil {
 			p.API.LogError("Unable to get file info", "err", appErr, "fileID", fileID)
-			p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Unable to get file info", StatusCode: http.StatusInternalServerError})
+			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 			return
 		}
 
 		fileReader, appErr := p.API.GetFile(fileID)
 		if appErr != nil {
 			p.API.LogError("Unable to get file", "err", appErr, "fileID", fileID)
-			p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Unable to get file", StatusCode: http.StatusInternalServerError})
+			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 			return
 		}
 
@@ -763,7 +772,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 		}).Media(bytes.NewReader(fileReader)).Do()
 		if err != nil {
 			p.API.LogError("Failed to upload file", "err", err)
-			p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Failed to upload file", StatusCode: http.StatusInternalServerError})
+			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 			return
 		}
 	}
