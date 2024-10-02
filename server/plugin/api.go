@@ -438,7 +438,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	}
 
 	if fileCreationErr != nil {
-		p.API.LogError("Failed to create google drive file", "err", fileCreationErr)
+		p.API.LogError("Failed to create Google Drive file", "err", fileCreationErr)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -528,7 +528,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
 	if err != nil {
-		p.API.LogError("Failed to fetch google drive changes", "err", err)
+		p.API.LogError("Failed to fetch Google Drive changes", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -537,7 +537,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	}).Do()
 
 	if err != nil {
-		p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", lastChange.FileId)
+		p.API.LogError("Failed to fetch Google Drive activity", "err", err, "fileID", lastChange.FileId)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

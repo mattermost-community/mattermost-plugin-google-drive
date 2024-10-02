@@ -131,7 +131,7 @@ func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess 
 	authToken, _ := p.getGoogleUserToken(userID)
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create drive client", "err", err)
+		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return err
 	}
 

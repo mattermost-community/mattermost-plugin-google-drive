@@ -167,7 +167,7 @@ func (p *Plugin) handleCommentNotifications(fileID, userID string, activity *dri
 	conf := p.getOAuthConfig()
 	dSrv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create drive service client", "err", err)
+		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return
 	}
 	file, _ := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime").Do()
@@ -204,7 +204,7 @@ func (p *Plugin) handleFileSharedNotification(fileID, userID string, authToken *
 	conf := p.getOAuthConfig()
 	dSrv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create drive service client", "err", err)
+		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return
 	}
 	file, err := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime").Do()
@@ -238,7 +238,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create drive service client", "err", err)
+		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return err
 	}
 
