@@ -443,7 +443,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	err = p.handleFilePermissions(request.UserId, createdFileID, fileCreationParams.FileAccess, request.ChannelId)
+	err = p.handleFilePermissions(request.UserId, createdFileID, fileCreationParams.FileAccess, request.ChannelId, fileCreationParams.Name)
 	if err != nil {
 		p.API.LogError("Failed to modify file permissions", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})

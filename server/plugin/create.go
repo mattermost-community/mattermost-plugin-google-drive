@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -12,7 +13,9 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	driveV2 "google.golang.org/api/drive/v2"
 	"google.golang.org/api/drive/v3"
+
 	"google.golang.org/api/option"
 )
 
@@ -66,8 +69,9 @@ func (p *Plugin) sendFileCreatedMessage(channelID, fileID, userID, message strin
 	return nil
 }
 
-func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess string, channelID string) error {
+func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess string, channelID string, fileName string) error {
 	permissions := make([]*drive.Permission, 0)
+	userMap := make(map[string]*model.User, 0)
 	switch fileAccess {
 	case "all_view":
 		permissions = append(permissions, &drive.Permission{
@@ -94,6 +98,7 @@ func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess 
 						EmailAddress: user.Email,
 						Type:         "user",
 					})
+					userMap[user.Email] = user
 				}
 			}
 		}
@@ -107,6 +112,7 @@ func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess 
 						EmailAddress: user.Email,
 						Type:         "user",
 					})
+					userMap[user.Email] = user
 				}
 			}
 		}
@@ -120,6 +126,7 @@ func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess 
 						EmailAddress: user.Email,
 						Type:         "user",
 					})
+					userMap[user.Email] = user
 				}
 			}
 		}
@@ -135,12 +142,25 @@ func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess 
 		return err
 	}
 
+	userErrors := []string{}
+	config := p.API.GetConfig()
 	for _, permission := range permissions {
 		_, err := srv.Permissions.Create(fileID, permission).Do()
 		if err != nil {
+			if strings.Contains(err.Error(), "shareOutNotPermitted") {
+				if config.PrivacySettings.ShowEmailAddress == nil || !*config.PrivacySettings.ShowEmailAddress {
+					userErrors = append(userErrors, "@"+userMap[permission.EmailAddress].Username)
+				} else {
+					userErrors = append(userErrors, permission.EmailAddress)
+				}
+				continue
+			}
 			p.API.LogError("Something went wrong while updating permissions for file", "err", err, "fileID", fileID)
 			return err
 		}
+	}
+	if len(userErrors) > 0 {
+		p.createBotDMPost(userID, fmt.Sprintf("Failed to share file, \"%s\", with the following users: %s", fileName, strings.Join(userErrors, ", ")), nil)
 	}
 	return nil
 }
@@ -179,27 +199,46 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 		Optional:    true,
 	})
 
-	dialog.Dialog.Elements = append(dialog.Dialog.Elements, model.DialogElement{
-		DisplayName: "File Access",
-		Name:        "file_access",
-		Type:        "select",
-		Options: []*model.PostActionOptions{
-			{
-				Text:  "Keep file private",
-				Value: "private",
-			},
-			{
-				Text:  "Members of the channel can view",
-				Value: "members_view",
-			},
-			{
-				Text:  "Members of the channel can comment",
-				Value: "members_comment",
-			},
-			{
-				Text:  "Members of the channel can edit",
-				Value: "members_edit",
-			},
+	ctx := context.Background()
+	conf := p.getOAuthConfig()
+	authToken, err := p.getGoogleUserToken(args.UserId)
+	if err != nil {
+		p.API.LogError("Failed to get user token", "err", err)
+		return "Failed to open file creation dialog"
+	}
+
+	srvV2, err := driveV2.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+	if err != nil {
+		p.API.LogError("Failed to create drive client", "err", err)
+		return "Failed to open file creation dialog"
+	}
+
+	about, err := srvV2.About.Get().Fields("domainSharingPolicy").Do()
+	if err != nil {
+		p.API.LogError("Failed to get user information", "err", err)
+		return "Failed to open file creation dialog"
+	}
+
+	options := []*model.PostActionOptions{
+		{
+			Text:  "Keep file private",
+			Value: "private",
+		},
+		{
+			Text:  "Members of the channel can view",
+			Value: "members_view",
+		},
+		{
+			Text:  "Members of the channel can comment",
+			Value: "members_comment",
+		},
+		{
+			Text:  "Members of the channel can edit",
+			Value: "members_edit",
+		},
+	}
+	if strings.ToLower(about.DomainSharingPolicy) == "allowed" || strings.ToLower(about.DomainSharingPolicy) == "allowedwithwarning" {
+		options = append(options, []*model.PostActionOptions{
 			{
 				Text:  "Anyone with the link can view",
 				Value: "all_view",
@@ -212,7 +251,14 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 				Text:  "Anyone with the link can edit",
 				Value: "all_edit",
 			},
-		},
+		}...)
+	}
+
+	dialog.Dialog.Elements = append(dialog.Dialog.Elements, model.DialogElement{
+		DisplayName: "File Access",
+		Name:        "file_access",
+		Type:        "select",
+		Options:     options,
 	})
 
 	dialog.Dialog.Elements = append(dialog.Dialog.Elements, model.DialogElement{
