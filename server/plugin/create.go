@@ -21,7 +21,7 @@ func (p *Plugin) sendFileCreatedMessage(channelID, fileID, userID, message strin
 	conf := p.getOAuthConfig()
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create drive client", "err", err)
+		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return err
 	}
 	file, err := srv.Files.Get(fileID).Fields("webViewLink", "id", "owners", "permissions", "name", "iconLink", "thumbnailLink", "createdTime").Do()

@@ -83,10 +83,10 @@ func (c *Configuration) Clone() *Configuration {
 // IsValid checks if all needed fields are set.
 func (c *Configuration) IsValid() error {
 	if c.GoogleOAuthClientID == "" {
-		return errors.New("must have a google oauth client id")
+		return errors.New("must have a Google OAuth client id")
 	}
 	if c.GoogleOAuthClientSecret == "" {
-		return errors.New("must have a google oauth client secret")
+		return errors.New("must have a Google OAuth client secret")
 	}
 
 	if c.EncryptionKey == "" {

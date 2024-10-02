@@ -283,7 +283,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	}
 	_, err = p.client.KV.Set(getWatchChannelDataKey(userID), channelData)
 	if err != nil {
-		p.API.LogError("Failed to set drive change channel data", "userID", userID, "channelData", channelData)
+		p.API.LogError("Failed to set Google Drive change channel data", "userID", userID, "channelData", channelData)
 		return err
 	}
 	return nil
@@ -316,7 +316,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	var watchChannelData WatchChannelData
 	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
 	if err != nil {
-		p.API.LogError("Failed to get drive change channel data", "userID", userID)
+		p.API.LogError("Failed to get Google Drive change channel data", "userID", userID)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
@@ -331,7 +331,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 
 	err = p.client.KV.Delete(getWatchChannelDataKey(userID))
 	if err != nil {
-		p.API.LogError("Failed to delete drive watch channel data", "err", err)
+		p.API.LogError("Failed to delete Google Drive watch channel data", "err", err)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
@@ -341,7 +341,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	}).Do()
 
 	if err != nil {
-		p.API.LogError("Failed to stop drive change channel", "err", err)
+		p.API.LogError("Failed to stop Google Drive change channel", "err", err)
 	}
 
 	return "Successfully disabled Google Drive activity notifications."
