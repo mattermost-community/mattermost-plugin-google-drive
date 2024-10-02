@@ -142,27 +142,43 @@ func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess 
 		return err
 	}
 
-	userErrors := []string{}
+	usersWithoutAccesss := []string{}
 	config := p.API.GetConfig()
+	var permissionError error
+
 	for _, permission := range permissions {
+		// Continue through the permissions loop when we encounter an error so we can inform the user who wasn't granted access.
+		if permissionError != nil {
+			usersWithoutAccesss = appendUsersWithoutAccessSlice(config, usersWithoutAccesss, userMap[permission.EmailAddress].Username, permission.EmailAddress)
+			continue
+		}
 		_, err := srv.Permissions.Create(fileID, permission).Do()
 		if err != nil {
+			usersWithoutAccesss = appendUsersWithoutAccessSlice(config, usersWithoutAccesss, userMap[permission.EmailAddress].Username, permission.EmailAddress)
+			// This error will occur if the user is not allowed to share the file with someone outside of their domain.
 			if strings.Contains(err.Error(), "shareOutNotPermitted") {
-				if config.PrivacySettings.ShowEmailAddress == nil || !*config.PrivacySettings.ShowEmailAddress {
-					userErrors = append(userErrors, "@"+userMap[permission.EmailAddress].Username)
-				} else {
-					userErrors = append(userErrors, permission.EmailAddress)
-				}
 				continue
 			}
 			p.API.LogError("Something went wrong while updating permissions for file", "err", err, "fileID", fileID)
-			return err
+			permissionError = err
 		}
 	}
-	if len(userErrors) > 0 {
-		p.createBotDMPost(userID, fmt.Sprintf("Failed to share file, \"%s\", with the following users: %s", fileName, strings.Join(userErrors, ", ")), nil)
+
+	if len(usersWithoutAccesss) > 0 {
+		p.createBotDMPost(userID, fmt.Sprintf("Failed to share file, \"%s\", with the following users: %s", fileName, strings.Join(usersWithoutAccesss, ", ")), nil)
 	}
-	return nil
+
+	return permissionError
+}
+
+func appendUsersWithoutAccessSlice(config *model.Config, usersWithoutAccesss []string, username string, email string) []string {
+	if config.PrivacySettings.ShowEmailAddress == nil || !*config.PrivacySettings.ShowEmailAddress {
+		usersWithoutAccesss = append(usersWithoutAccesss, "@"+username)
+	} else {
+		usersWithoutAccesss = append(usersWithoutAccesss, email)
+	}
+
+	return usersWithoutAccesss
 }
 
 func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
