@@ -446,7 +446,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	err = p.handleFilePermissions(request.UserId, createdFileID, fileCreationParams.FileAccess, request.ChannelId, fileCreationParams.Name)
 	if err != nil {
 		p.API.LogError("Failed to modify file permissions", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "File was successully created but file permissions failed to apply. Please contact your system administrator.", StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "File was successfully created but file permissions failed to apply. Please contact your system administrator.", StatusCode: http.StatusInternalServerError})
 		return
 	}
 	err = p.sendFileCreatedMessage(request.ChannelId, createdFileID, request.UserId, fileCreationParams.Message, fileCreationParams.ShareInChannel, authToken)
