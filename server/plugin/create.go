@@ -232,7 +232,7 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 	about, err := srvV2.About.Get().Fields("domainSharingPolicy").Do()
 	if err != nil {
 		p.API.LogError("Failed to get user information", "err", err)
-		return "Failed to open file creation dialog"
+		return "Failed to open file creation dialog. Please contact your system administrator."
 	}
 
 	options := []*model.PostActionOptions{
