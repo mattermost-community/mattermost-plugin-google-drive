@@ -226,7 +226,7 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 	srvV2, err := driveV2.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
 		p.API.LogError("Failed to create drive client", "err", err)
-		return "Failed to open file creation dialog"
+		return "Failed to open file creation dialog. Please contact your system administrator."
 	}
 
 	about, err := srvV2.About.Get().Fields("domainSharingPolicy").Do()
