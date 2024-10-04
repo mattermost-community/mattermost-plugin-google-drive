@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -458,6 +458,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 }
 
 func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter, r *http.Request) {
+	var watchChannelData WatchChannelData
 	resourceState := r.Header.Get("X-Goog-Resource-State")
 	userID := r.URL.Query().Get("userID")
 
@@ -466,14 +467,20 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	resourceURI := r.Header.Get("X-Goog-Resource-Uri")
-	u, err := url.Parse(resourceURI)
+	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
 	if err != nil {
-		p.API.LogError("Failed to parse resource URI", "err", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	pageToken := u.Query().Get("pageToken")
+
+	token := r.Header.Get("X-Goog-Channel-Token")
+	if watchChannelData.Token != token {
+		p.API.LogError("Invalid channel token")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	pageToken := watchChannelData.PageToken
 
 	conf := p.getOAuthConfig()
 	authToken, err := p.getGoogleUserToken(userID)
@@ -496,65 +503,121 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
+	NewStartPageTokenInt, err := strconv.Atoi(changeList.NewStartPageToken)
+	if err != nil {
+		p.API.LogError("Failed to convert NewStartPageToken to int", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	pageTokenInt, err := strconv.Atoi(pageToken)
+	if err != nil {
+		p.API.LogError("Failed to convert pageToken to int", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	numberOfChanges := NewStartPageTokenInt - pageTokenInt
+	// Updated pageToken gets saved at the end along with the new FileLastActivity.
+	watchChannelData.PageToken = changeList.NewStartPageToken
+	defer func() {
+		saved, err := p.client.KV.Set(getWatchChannelDataKey(userID), watchChannelData)
+		if !saved && err != nil {
+			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		} else if !saved && err == nil {
+			p.API.LogError("Failed to save watch channel data")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}()
+
 	if changeList.Changes == nil || len(changeList.Changes) == 0 {
 		p.API.LogInfo("No Google Drive changes found", "pageToken", pageToken)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	lastChange := changeList.Changes[len(changeList.Changes)-1]
+	for _, change := range changeList.Changes {
+		if change.File == nil {
+			p.API.LogError("No file found", "pageToken", pageToken)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 
-	if lastChange.File == nil {
-		p.API.LogError("No file found", "pageToken", pageToken)
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		modifiedTime, _ := time.Parse(time.RFC3339, change.File.ModifiedTime)
+		lastChangeTime, _ := time.Parse(time.RFC3339, change.Time)
+		viewedByMeTime, _ := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
+
+		if lastChangeTime.Sub(modifiedTime) > lastChangeTime.Sub(viewedByMeTime) {
+			p.API.LogDebug("User has already opened the file after the change.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+		if err != nil {
+			p.API.LogError("Failed to fetch google drive changes", "err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		driveActivityQuery := &driveactivity.QueryDriveActivityRequest{
+			ItemName: fmt.Sprintf("items/%s", change.FileId),
+		}
+
+		lastActivity := watchChannelData.FileLastActivity[change.FileId]
+		// If we have a last activity timestamp for this file we can use it to filter the activities.
+		if lastActivity != "" {
+			driveActivityQuery.Filter = "time > \"" + lastActivity + "\""
+		} else {
+			// PageSize documentation: https://developers.google.com/drive/activity/v2/reference/rest/v2/activity/query#QueryDriveActivityRequest.
+			// TLDR: PageSize does not return the exact number of activities that you specify but it is a good fallback for this one time.
+			driveActivityQuery.PageSize = int64(numberOfChanges)
+		}
+
+		activityRes, err := activitySrv.Activity.Query(driveActivityQuery).Do()
+		if err != nil {
+			p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", change.FileId)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if activityRes == nil || activityRes.Activities == nil || len(activityRes.Activities) == 0 {
+			p.API.LogInfo("No activities found")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Newest activity is at the end of the list so iterate through the list in reverse.
+		for i := len(activityRes.Activities) - 1; i >= 0; i-- {
+			activity := activityRes.Activities[i]
+			if activity.PrimaryActionDetail.Comment != nil {
+				if activity.Timestamp > lastActivity {
+					lastActivity = activity.Timestamp
+				}
+				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
+					continue
+				}
+				p.handleCommentNotifications(change.FileId, userID, activity, authToken)
+			}
+			if activity.PrimaryActionDetail.PermissionChange != nil {
+				if activity.Timestamp > lastActivity {
+					lastActivity = activity.Timestamp
+				}
+				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
+					continue
+				}
+				p.handleFileSharedNotification(change.FileId, userID, authToken)
+			}
+		}
+
+		if lastActivity > watchChannelData.FileLastActivity[change.FileId] {
+			watchChannelData.FileLastActivity[change.FileId] = lastActivity
+		}
 	}
 
-	if lastChange.File.LastModifyingUser != nil && lastChange.File.LastModifyingUser.Me {
-		p.API.LogError("Owner of the file performed this action", "pageToken", pageToken)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	modifiedTime, _ := time.Parse(time.RFC3339, lastChange.File.ModifiedTime)
-	lastChangeTime, _ := time.Parse(time.RFC3339, lastChange.Time)
-	viewedByMeTime, _ := time.Parse(time.RFC3339, lastChange.File.ViewedByMeTime)
-
-	if lastChangeTime.Sub(modifiedTime) > lastChangeTime.Sub(viewedByMeTime) {
-		p.API.LogDebug("User has already opened the file after the change.")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
-	if err != nil {
-		p.API.LogError("Failed to fetch google drive changes", "err", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	activityRes, err := activitySrv.Activity.Query(&driveactivity.QueryDriveActivityRequest{
-		PageSize: 1, ItemName: fmt.Sprintf("items/%s", lastChange.FileId),
-	}).Do()
-
-	if err != nil {
-		p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", lastChange.FileId)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if activityRes == nil || activityRes.Activities == nil || len(activityRes.Activities) == 0 {
-		p.API.LogInfo("No activities found")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	activity := activityRes.Activities[0]
-	if activity.PrimaryActionDetail.Comment != nil {
-		p.handleCommentNotifications(lastChange.FileId, userID, activity, authToken)
-	}
-	if activity.PrimaryActionDetail.PermissionChange != nil {
-		p.handleFileSharedNotification(lastChange.FileId, userID, authToken)
-	}
 	w.WriteHeader(http.StatusOK)
 }
 

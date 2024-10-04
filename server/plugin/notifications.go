@@ -17,10 +17,13 @@ import (
 )
 
 type WatchChannelData struct {
-	ChannelID  string `json:"channel_id"`
-	ResourceID string `json:"resource_id"`
-	MMUserID   string `json:"mm_user_id"`
-	Expiration int64  `json:"expiration"`
+	ChannelID        string            `json:"channel_id"`
+	ResourceID       string            `json:"resource_id"`
+	MMUserID         string            `json:"mm_user_id"`
+	Expiration       int64             `json:"expiration"`
+	Token            string            `json:"token"`
+	PageToken        string            `json:"page_token"`
+	FileLastActivity map[string]string `json:"file_last_activity"`
 }
 
 func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
@@ -84,17 +87,21 @@ func (p *Plugin) handleReplyAdded(dSrv *drive.Service, fileID, userID string, ac
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
 	lastReply := ""
+	lastReplyAuthor := ""
 	onBeforeLast := ""
 	if len(comment.Replies) > 0 {
 		lastReply = comment.Replies[len(comment.Replies)-1].Content
+		lastReplyAuthor = comment.Replies[len(comment.Replies)-1].Author.DisplayName
 		if len(comment.Replies) > 1 {
 			onBeforeLast = comment.Replies[len(comment.Replies)-2].Content
+		} else {
+			onBeforeLast = comment.Content
 		}
 	}
 	props := map[string]any{
 		"attachments": []any{
 			map[string]any{
-				"pretext": fmt.Sprintf("%s replied on %s %s", comment.Author.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment)),
+				"pretext": fmt.Sprintf("%s replied on %s %s", lastReplyAuthor, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment)),
 				"text":    fmt.Sprintf("Previous reply:\n%s\n> %s", onBeforeLast, lastReply),
 				"actions": []any{
 					map[string]any{
@@ -256,12 +263,14 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	query := url.Query()
 	query.Add("userID", userID)
 	url.RawQuery = query.Encode()
+	token := model.NewRandomString(64)
 
 	requestChannel := drive.Channel{
 		Kind:       "api#channel",
 		Address:    url.String(),
 		Payload:    true,
 		Id:         uuid.NewString(),
+		Token:      token,
 		Type:       "web_hook",
 		Expiration: time.Now().Add(604800 * time.Second).UnixMilli(),
 		Params: map[string]string{
@@ -276,10 +285,13 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	}
 
 	channelData := WatchChannelData{
-		ChannelID:  channel.Id,
-		ResourceID: channel.ResourceId,
-		Expiration: channel.Expiration,
-		MMUserID:   userID,
+		ChannelID:        channel.Id,
+		ResourceID:       channel.ResourceId,
+		Expiration:       channel.Expiration,
+		Token:            channel.Token,
+		MMUserID:         userID,
+		PageToken:        startPageToken.StartPageToken,
+		FileLastActivity: map[string]string{},
 	}
 	_, err = p.client.KV.Set(getWatchChannelDataKey(userID), channelData)
 	if err != nil {

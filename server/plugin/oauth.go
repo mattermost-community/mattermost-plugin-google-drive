@@ -33,6 +33,7 @@ func (p *Plugin) getOAuthConfig() *oauth2.Config {
 		"https://www.googleapis.com/auth/documents",
 		"https://www.googleapis.com/auth/presentations",
 		"https://www.googleapis.com/auth/spreadsheets",
+		"https://www.googleapis.com/auth/drive",
 	}
 
 	return &oauth2.Config{
