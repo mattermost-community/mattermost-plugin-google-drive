@@ -42,18 +42,20 @@ func (p *Plugin) getAllChannelUsers(channelID string) []*model.User {
 	return allUsers
 }
 
-func (p *Plugin) getUserDisplayName(user *drive.User) string {
+func (p *Plugin) getUserDisplayName(user *drive.User, config *model.Config) string {
 	userDisplay := ""
 	if user != nil {
 		if user.DisplayName != "" {
 			userDisplay += user.DisplayName
 		}
 		if user.EmailAddress != "" {
-			userDisplay += "(" + user.EmailAddress + ")"
+			if config.PrivacySettings.ShowEmailAddress == nil || !*config.PrivacySettings.ShowEmailAddress {
+				userDisplay += " (" + user.EmailAddress + ")"
+			}
 			user, _ := p.API.GetUserByEmail(user.EmailAddress)
 
 			if user != nil {
-				userDisplay += "@" + user.Username
+				userDisplay += " @" + user.Username
 			}
 		}
 	}
