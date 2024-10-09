@@ -179,6 +179,9 @@ func (p *Plugin) handleCommentNotifications(fileID, userID string, activity *dri
 	}
 	file, _ := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime").Do()
 
+	if ok := activity.PrimaryActionDetail.Comment.Post != nil; !ok {
+		return
+	}
 	postSubType := activity.PrimaryActionDetail.Comment.Post.Subtype
 
 	switch postSubType {
@@ -208,23 +211,22 @@ func (p *Plugin) handleCommentNotifications(fileID, userID string, activity *dri
 
 func (p *Plugin) handleFileSharedNotification(fileID, userID string, authToken *oauth2.Token) {
 	ctx := context.Background()
+	config := p.API.GetConfig()
 	conf := p.getOAuthConfig()
 	dSrv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
 		p.API.LogError("Failed to create drive service client", "err", err)
 		return
 	}
-	file, err := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime").Do()
+	file, err := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime", "sharingUser").Do()
 	if err != nil {
 		p.API.LogError("Failed to fetch file", "err", err, "fileID", fileID)
 		return
 	}
 
-	author := file.SharingUser
-	userDisplay := p.getUserDisplayName(author)
-	message := userDisplay + " shared an item with you"
+	userDisplay := p.getUserDisplayName(file.SharingUser, config)
 
-	p.createBotDMPost(userID, message, map[string]any{
+	p.createBotDMPost(userID, userDisplay+" shared an item with you", map[string]any{
 		"attachments": []any{map[string]any{
 			"title":       file.Name,
 			"title_link":  file.WebViewLink,

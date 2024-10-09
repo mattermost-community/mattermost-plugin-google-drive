@@ -8,13 +8,13 @@ import (
 	"io"
 	"net/http"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/logger"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
 	"github.com/pkg/errors"
@@ -480,8 +480,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	pageToken := watchChannelData.PageToken
-
 	conf := p.getOAuthConfig()
 	authToken, err := p.getGoogleUserToken(userID)
 	if err != nil {
@@ -496,54 +494,97 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	changeList, err := srv.Changes.List(pageToken).Fields("*").Do()
+
+	// Mutex to prevent multiple requests from the same user.
+	m, err := cluster.NewMutex(p.API, "drive_watch_notifications_"+userID)
 	if err != nil {
-		p.API.LogError("Failed to fetch Google Drive changes", "err", err)
+		p.API.LogError("Failed to create mutex", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	NewStartPageTokenInt, err := strconv.Atoi(changeList.NewStartPageToken)
-	if err != nil {
-		p.API.LogError("Failed to convert NewStartPageToken to int", "err", err)
+	lockErr := m.LockWithContext(c.Ctx)
+	if lockErr != nil {
+		p.API.LogError("Failed to lock mutex", "err", lockErr)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer m.Unlock()
 
-	pageTokenInt, err := strconv.Atoi(pageToken)
+	// Get the pageToken from the KV store, it has changed since we acquired the lock.
+	err = p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
 	if err != nil {
-		p.API.LogError("Failed to convert pageToken to int", "err", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	numberOfChanges := NewStartPageTokenInt - pageTokenInt
-	// Updated pageToken gets saved at the end along with the new FileLastActivity.
-	watchChannelData.PageToken = changeList.NewStartPageToken
+	pageToken := watchChannelData.PageToken
+	if pageToken == "" {
+		tokenResponse, tokenErr := srv.Changes.GetStartPageToken().Do()
+		if tokenErr != nil {
+			p.API.LogError("Failed to get start page token", "err", tokenErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		pageToken = tokenResponse.StartPageToken
+	}
+
+	var pageTokenErr error
+	var changes []*drive.Change
+	for {
+		changeList, changeErr := srv.Changes.List(pageToken).Fields("*").Do()
+		if changeErr != nil {
+			p.API.LogError("Failed to fetch Google Drive changes", "err", changeErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		changes = append(changes, changeList.Changes...)
+		// NewStartPageToken will be empty if there is another page of results. This should only happen if this user changed over 20/30 files at once. There is no definitive number.
+		if changeList.NewStartPageToken != "" {
+			// Updated pageToken gets saved at the end along with the new FileLastActivity.
+			pageToken = changeList.NewStartPageToken
+			p.API.LogDebug("Page tokens", "NewStartPageToken", changeList.NewStartPageToken, "pageToken", pageToken, "lengthOfChangeList.Changes", len(changeList.Changes))
+			break
+		}
+		p.API.LogDebug("NextPageToken populated", "NextPageToken", changeList.NextPageToken)
+		pageToken = changeList.NextPageToken
+	}
+
 	defer func() {
-		saved, err := p.client.KV.Set(getWatchChannelDataKey(userID), watchChannelData)
-		if !saved && err != nil {
-			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err)
+		// There are instances where we don't want to save the pageToken at the end of the request due to a fatal error.
+		if pageTokenErr == nil {
+			watchChannelData.PageToken = pageToken
+		}
+		saved, kvErr := p.client.KV.Set(getWatchChannelDataKey(userID), watchChannelData)
+		if !saved && kvErr != nil {
+			p.API.LogError("Database error occureed while trying to save watch channel data", "err", kvErr)
 			w.WriteHeader(http.StatusBadRequest)
 			return
-		} else if !saved && err == nil {
+		} else if !saved && kvErr == nil {
 			p.API.LogError("Failed to save watch channel data")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}()
 
-	if changeList.Changes == nil || len(changeList.Changes) == 0 {
+	if len(changes) == 0 {
 		p.API.LogInfo("No Google Drive changes found", "pageToken", pageToken)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	for _, change := range changeList.Changes {
+	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+	if err != nil {
+		pageTokenErr = err
+		p.API.LogError("Failed to fetch google drive changes", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	for _, change := range changes {
 		if change.File == nil {
-			p.API.LogError("No file found", "pageToken", pageToken)
-			w.WriteHeader(http.StatusOK)
-			return
+			p.API.LogDebug("No file found", "pageToken", pageToken)
+			continue
 		}
 
 		modifiedTime, _ := time.Parse(time.RFC3339, change.File.ModifiedTime)
@@ -552,15 +593,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 		if lastChangeTime.Sub(modifiedTime) > lastChangeTime.Sub(viewedByMeTime) {
 			p.API.LogDebug("User has already opened the file after the change.")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
-		if err != nil {
-			p.API.LogError("Failed to fetch google drive changes", "err", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			continue
 		}
 
 		driveActivityQuery := &driveactivity.QueryDriveActivityRequest{
@@ -568,26 +601,25 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 
 		lastActivity := watchChannelData.FileLastActivity[change.FileId]
+		p.API.LogDebug("Last activity", "lastActivity", lastActivity, "fileID", change.FileId)
 		// If we have a last activity timestamp for this file we can use it to filter the activities.
 		if lastActivity != "" {
 			driveActivityQuery.Filter = "time > \"" + lastActivity + "\""
 		} else {
 			// PageSize documentation: https://developers.google.com/drive/activity/v2/reference/rest/v2/activity/query#QueryDriveActivityRequest.
-			// TLDR: PageSize does not return the exact number of activities that you specify but it is a good fallback for this one time.
-			driveActivityQuery.PageSize = int64(numberOfChanges)
+			// TLDR: PageSize does not return the exact number of activities that you specify. LastActivity is not set so lets just get the latest activity.
+			driveActivityQuery.PageSize = 1
 		}
 
 		activityRes, err := activitySrv.Activity.Query(driveActivityQuery).Do()
 		if err != nil {
-			p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", change.FileId)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			p.API.LogDebug("Failed to fetch google drive activity", "err", err, "fileID", change.FileId)
+			continue
 		}
 
 		if activityRes == nil || activityRes.Activities == nil || len(activityRes.Activities) == 0 {
-			p.API.LogInfo("No activities found")
-			w.WriteHeader(http.StatusOK)
-			return
+			p.API.LogDebug("No activities found for File", "fileID", change.FileId)
+			continue
 		}
 
 		// Newest activity is at the end of the list so iterate through the list in reverse.
