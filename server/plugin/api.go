@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/mattermost/mattermost/server/public/model"
+	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/logger"
@@ -25,6 +25,8 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
+
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 // ResponseType indicates type of response returned by api
@@ -110,7 +112,7 @@ func (p *Plugin) withRecovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
-				p.client.Log.Warn("Recovered from a panic",
+				p.Client.Log.Warn("Recovered from a panic",
 					"url", r.URL.String(),
 					"error", x,
 					"stack", string(debug.Stack()))
@@ -138,7 +140,7 @@ func (p *Plugin) writeAPIError(w http.ResponseWriter, err *APIErrorResponse) {
 	b, _ := json.Marshal(err)
 	w.WriteHeader(err.StatusCode)
 	if _, err := w.Write(b); err != nil {
-		p.client.Log.Warn("Can't write api error http response", "err", err.Error())
+		p.Client.Log.Warn("Can't write api error http response", "err", err.Error())
 	}
 }
 
@@ -148,7 +150,7 @@ func (p *Plugin) writeInteractiveDialogError(w http.ResponseWriter, errResponse 
 		errResponse.Error = "Something went wrong, please contact your system administrator"
 	}
 	if err := json.NewEncoder(w).Encode(errResponse); err != nil {
-		p.client.Log.Warn("Can't write api error http response", "err", err.Error())
+		p.Client.Log.Warn("Can't write api error http response", "err", err.Error())
 	}
 }
 
@@ -162,7 +164,7 @@ func (p *Plugin) checkAuth(handler http.HandlerFunc, responseType ResponseType) 
 			case ResponseTypePlain:
 				http.Error(w, "Not authorized", http.StatusUnauthorized)
 			default:
-				p.client.Log.Debug("Unknown ResponseType detected")
+				p.Client.Log.Debug("Unknown ResponseType detected")
 			}
 			return
 		}
@@ -180,9 +182,9 @@ func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.
 
 	conf := p.getOAuthConfig()
 
-	state := fmt.Sprintf("%v_%v", model.NewId()[0:15], userID)
+	state := fmt.Sprintf("%v_%v", mattermostModel.NewId()[0:15], userID)
 
-	if _, err := p.client.KV.Set(state, []byte(state)); err != nil {
+	if err := p.KVStore.StoreOAuthStateToken(state, state); err != nil {
 		c.Log.WithError(err).Warnf("Can't store state oauth2")
 		http.Error(w, "can't store state oauth2", http.StatusInternalServerError)
 		return
@@ -207,7 +209,7 @@ func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.
 		}
 
 		if errorMsg != "" {
-			_, err := p.poster.DMWithAttachments(userID, &model.SlackAttachment{
+			_, err := p.poster.DMWithAttachments(userID, &mattermostModel.SlackAttachment{
 				Text:  fmt.Sprintf("There was an error connecting to your Google account: `%s` Please double check your configuration.", errorMsg),
 				Color: string(flow.ColorDanger),
 			})
@@ -247,8 +249,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 
 	state := r.URL.Query().Get("state")
 
-	var storedState []byte
-	err := p.client.KV.Get(state, &storedState)
+	storedState, err := p.KVStore.GetOAuthStateToken(state)
 	if err != nil {
 		c.Log.WithError(err).Warnf("Can't get state from store")
 
@@ -257,7 +258,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 		return
 	}
 
-	err = p.client.KV.Delete(state)
+	err = p.KVStore.DeleteOAuthStateToken(state)
 	if err != nil {
 		c.Log.WithError(err).Warnf("Failed to delete state token")
 
@@ -288,7 +289,21 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 		return
 	}
 
-	if err = p.storeGoogleUserToken(userID, token); err != nil {
+	jsonToken, err := json.Marshal(token)
+	if err != nil {
+		c.Log.WithError(err).Warnf("Failed to marshal token to json")
+		http.Error(w, errors.Wrap(err, "Failed to marshal token to json").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	encryptedToken, err := utils.Encrypt([]byte(config.EncryptionKey), string(jsonToken))
+	if err != nil {
+		c.Log.WithError(err).Warnf("Failed to encrypt token")
+		http.Error(w, errors.Wrap(err, "Failed to encrypt token").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = p.KVStore.StoreGoogleUserToken(userID, encryptedToken); err != nil {
 		c.Log.WithError(err).Warnf("Can't store user token")
 
 		rErr = errors.Wrap(err, "Unable to connect user to Google account")
@@ -311,13 +326,13 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 
 	p.TrackUserEvent("account_connected", userID, nil)
 
-	p.client.Frontend.PublishWebSocketEvent(
+	p.Client.Frontend.PublishWebSocketEvent(
 		"google_connect",
 		map[string]interface{}{
 			"connected":        true,
 			"google_client_id": config.GoogleOAuthClientID,
 		},
-		&model.WebsocketBroadcast{UserId: userID},
+		&mattermostModel.WebsocketBroadcast{UserId: userID},
 	)
 
 	html := `
@@ -340,8 +355,8 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	}
 }
 
-func getRawRequestAndFileCreationParams(r *http.Request) (*FileCreationRequest, *model.SubmitDialogRequest, error) {
-	var request model.SubmitDialogRequest
+func getRawRequestAndFileCreationParams(r *http.Request) (*FileCreationRequest, *mattermostModel.SubmitDialogRequest, error) {
+	var request mattermostModel.SubmitDialogRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		return nil, nil, err
@@ -458,7 +473,6 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 }
 
 func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter, r *http.Request) {
-	var watchChannelData WatchChannelData
 	resourceState := r.Header.Get("X-Goog-Resource-State")
 	userID := r.URL.Query().Get("userID")
 
@@ -467,7 +481,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
+	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -512,7 +526,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	defer m.Unlock()
 
 	// Get the pageToken from the KV store, it has changed since we acquired the lock.
-	err = p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
+	watchChannelData, err = p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -555,14 +569,10 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		if pageTokenErr == nil {
 			watchChannelData.PageToken = pageToken
 		}
-		saved, kvErr := p.client.KV.Set(getWatchChannelDataKey(userID), watchChannelData)
-		if !saved && kvErr != nil {
-			p.API.LogError("Database error occureed while trying to save watch channel data", "err", kvErr)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		} else if !saved && kvErr == nil {
-			p.API.LogError("Failed to save watch channel data")
-			w.WriteHeader(http.StatusBadRequest)
+		err = p.KVStore.StoreWatchChannelData(userID, *watchChannelData)
+		if err != nil {
+			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}()
@@ -611,20 +621,30 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			driveActivityQuery.PageSize = 1
 		}
 
-		activityRes, err := activitySrv.Activity.Query(driveActivityQuery).Do()
-		if err != nil {
-			p.API.LogDebug("Failed to fetch google drive activity", "err", err, "fileID", change.FileId)
-			continue
+		var activities []*driveactivity.DriveActivity
+		for {
+			activityRes, err := activitySrv.Activity.Query(driveActivityQuery).Do()
+			if err != nil {
+				p.API.LogDebug("Failed to fetch google drive activity", "err", err, "fileID", change.FileId)
+				continue
+			}
+			activities = append(activities, activityRes.Activities...)
+			if activityRes.NextPageToken != "" && driveActivityQuery.PageSize != 1 {
+				p.API.LogDebug("NextPageToken populated", "NextPageToken", activityRes.NextPageToken)
+				driveActivityQuery.PageToken = activityRes.NextPageToken
+			} else {
+				break
+			}
 		}
 
-		if activityRes == nil || activityRes.Activities == nil || len(activityRes.Activities) == 0 {
+		if len(activities) == 0 {
 			p.API.LogDebug("No activities found for File", "fileID", change.FileId)
 			continue
 		}
 
 		// Newest activity is at the end of the list so iterate through the list in reverse.
-		for i := len(activityRes.Activities) - 1; i >= 0; i-- {
-			activity := activityRes.Activities[i]
+		for i := len(activities) - 1; i >= 0; i-- {
+			activity := activities[i]
 			if activity.PrimaryActionDetail.Comment != nil {
 				if activity.Timestamp > lastActivity {
 					lastActivity = activity.Timestamp
@@ -661,7 +681,7 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 		return
 	}
 	defer r.Body.Close()
-	var request model.PostActionIntegrationRequest
+	var request mattermostModel.PostActionIntegrationRequest
 	err = json.Unmarshal(requestData, &request)
 	if err != nil {
 		p.API.LogError("Failed to parse request body", "err", err)
@@ -671,20 +691,20 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 
 	commentID := request.Context["commentID"].(string)
 	fileID := request.Context["fileID"].(string)
-	dialog := model.OpenDialogRequest{
+	dialog := mattermostModel.OpenDialogRequest{
 		TriggerId: request.TriggerId,
-		URL:       fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s", *p.API.GetConfig().ServiceSettings.SiteURL, manifest.Id, fileID, commentID),
-		Dialog: model.Dialog{
+		URL:       fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id, fileID, commentID),
+		Dialog: mattermostModel.Dialog{
 			CallbackId:     "reply",
 			Title:          "Reply to comment",
-			Elements:       []model.DialogElement{},
+			Elements:       []mattermostModel.DialogElement{},
 			SubmitLabel:    "Reply",
 			NotifyOnCancel: false,
 			State:          request.PostId,
 		},
 	}
 
-	dialog.Dialog.Elements = append(dialog.Dialog.Elements, model.DialogElement{
+	dialog.Dialog.Elements = append(dialog.Dialog.Elements, mattermostModel.DialogElement{
 		DisplayName: "Message",
 		Name:        "message",
 		Type:        "textarea",
@@ -707,7 +727,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	}
 	defer r.Body.Close()
 
-	var request model.SubmitDialogRequest
+	var request mattermostModel.SubmitDialogRequest
 	err = json.Unmarshal(requestData, &request)
 	if err != nil {
 		p.API.LogError("Failed to parse request body", "err", err)
@@ -740,7 +760,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 		return
 	}
 
-	post := model.Post{
+	post := mattermostModel.Post{
 		Message:   fmt.Sprintf("You replied to this comment with: \n> %s", reply.Content),
 		ChannelId: request.ChannelId,
 		RootId:    request.State,
@@ -755,7 +775,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 }
 
 func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Request) {
-	var request model.SubmitDialogRequest
+	var request mattermostModel.SubmitDialogRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		p.API.LogError("Failed to decode SubmitDialogRequest", "err", err)
@@ -804,7 +824,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	p.API.SendEphemeralPost(c.UserID, &model.Post{
+	p.API.SendEphemeralPost(c.UserID, &mattermostModel.Post{
 		Message:   "Successfully uploaded file in Google Drive.",
 		ChannelId: request.ChannelId,
 		UserId:    p.BotUserID,
@@ -812,7 +832,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 }
 
 func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http.Request) {
-	var request model.SubmitDialogRequest
+	var request mattermostModel.SubmitDialogRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		p.API.LogError("Failed to decode SubmitDialogRequest", "err", err)
@@ -846,8 +866,8 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 		return
 	}
 
-	fileIds := post.FileIds
-	for _, fileID := range fileIds {
+	fileIDs := post.FileIds
+	for _, fileID := range fileIDs {
 		fileInfo, appErr := p.API.GetFileInfo(fileID)
 		if appErr != nil {
 			p.API.LogError("Unable to get file info", "err", appErr, "fileID", fileID)
@@ -871,7 +891,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 			return
 		}
 	}
-	p.API.SendEphemeralPost(c.UserID, &model.Post{
+	p.API.SendEphemeralPost(c.UserID, &mattermostModel.Post{
 		Message:   "Successfully uploaded all files in Google Drive.",
 		ChannelId: request.ChannelId,
 		UserId:    p.BotUserID,

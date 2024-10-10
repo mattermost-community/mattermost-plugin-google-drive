@@ -9,9 +9,9 @@ import (
 
 func (p *Plugin) handleAbout(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
 	text, err := command.BuildInfo(model.Manifest{
-		Id:      manifest.Id,
-		Version: manifest.Version,
-		Name:    manifest.Name,
+		Id:      Manifest.Id,
+		Version: Manifest.Version,
+		Name:    Manifest.Name,
 	})
 	if err != nil {
 		text = errors.Wrap(err, "failed to get build info").Error()

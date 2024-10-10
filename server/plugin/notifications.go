@@ -8,23 +8,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mattermost/mattermost/server/public/model"
+	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
 	"google.golang.org/api/option"
-)
 
-type WatchChannelData struct {
-	ChannelID        string            `json:"channel_id"`
-	ResourceID       string            `json:"resource_id"`
-	MMUserID         string            `json:"mm_user_id"`
-	Expiration       int64             `json:"expiration"`
-	Token            string            `json:"token"`
-	PageToken        string            `json:"page_token"`
-	FileLastActivity map[string]string `json:"file_last_activity"`
-}
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/utils"
+)
 
 func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	if len(activity.Targets) == 0 ||
@@ -46,13 +39,13 @@ func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, 
 	props := map[string]any{
 		"attachments": []any{
 			map[string]any{
-				"pretext": fmt.Sprintf("%s commented on %s %s", comment.Author.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, file.WebViewLink)),
+				"pretext": fmt.Sprintf("%s commented on %s %s", comment.Author.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, file.WebViewLink)),
 				"text":    fmt.Sprintf("%s\n> %s", quotedValue, comment.Content),
 				"actions": []any{
 					map[string]any{
 						"name": "Reply to comment",
 						"integration": map[string]any{
-							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, manifest.Id),
+							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id),
 							"context": map[string]any{
 								"commentID": commentID,
 								"fileID":    fileID,
@@ -68,7 +61,7 @@ func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, 
 
 func (p *Plugin) handleDeletedComment(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("A comment was deleted in %s %s", getInlineImage("Google failed:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("A comment was deleted in %s %s", utils.GetInlineImage("Google failed:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
@@ -101,13 +94,13 @@ func (p *Plugin) handleReplyAdded(dSrv *drive.Service, fileID, userID string, ac
 	props := map[string]any{
 		"attachments": []any{
 			map[string]any{
-				"pretext": fmt.Sprintf("%s replied on %s %s", lastReplyAuthor, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment)),
+				"pretext": fmt.Sprintf("%s replied on %s %s", lastReplyAuthor, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment)),
 				"text":    fmt.Sprintf("Previous reply:\n%s\n> %s", onBeforeLast, lastReply),
 				"actions": []any{
 					map[string]any{
 						"name": "Reply to comment",
 						"integration": map[string]any{
-							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, manifest.Id),
+							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id),
 							"context": map[string]any{
 								"commentID": commentID,
 								"fileID":    fileID,
@@ -123,7 +116,7 @@ func (p *Plugin) handleReplyAdded(dSrv *drive.Service, fileID, userID string, ac
 
 func (p *Plugin) handleReplyDeleted(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("A comment reply was deleted in %s %s", getInlineImage("Google failed:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("A comment reply was deleted in %s %s", utils.GetInlineImage("Google failed:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
@@ -141,7 +134,7 @@ func (p *Plugin) handleResolvedComment(dSrv *drive.Service, fileID, userID strin
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("%s marked a thread as resolved in %s %s", comment.Author.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("%s marked a thread as resolved in %s %s", comment.Author.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
@@ -159,13 +152,13 @@ func (p *Plugin) handleReopenedComment(dSrv *drive.Service, fileID, userID strin
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("%s reopened a thread in %s %s", comment.Author.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("%s reopened a thread in %s %s", comment.Author.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
 func (p *Plugin) handleSuggestionReplyAdded(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("%s added a new suggestion in %s %s", file.LastModifyingUser.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("%s added a new suggestion in %s %s", file.LastModifyingUser.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
@@ -257,7 +250,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 		return err
 	}
 
-	url, err := url.Parse(fmt.Sprintf("%s/plugins/%s/api/v1/webhook", *p.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id))
+	url, err := url.Parse(fmt.Sprintf("%s/plugins/%s/api/v1/webhook", *p.Client.Configuration.GetConfig().ServiceSettings.SiteURL, Manifest.Id))
 	if err != nil {
 		p.API.LogError("Failed to parse webhook url", "err", err)
 		return err
@@ -265,7 +258,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	query := url.Query()
 	query.Add("userID", userID)
 	url.RawQuery = query.Encode()
-	token := model.NewRandomString(64)
+	token := mattermostModel.NewRandomString(64)
 
 	requestChannel := drive.Channel{
 		Kind:       "api#channel",
@@ -286,7 +279,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 		return err
 	}
 
-	channelData := WatchChannelData{
+	channelData := model.WatchChannelData{
 		ChannelID:        channel.Id,
 		ResourceID:       channel.ResourceId,
 		Expiration:       channel.Expiration,
@@ -295,7 +288,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 		PageToken:        startPageToken.StartPageToken,
 		FileLastActivity: map[string]string{},
 	}
-	_, err = p.client.KV.Set(getWatchChannelDataKey(userID), channelData)
+	err = p.KVStore.StoreWatchChannelData(userID, channelData)
 	if err != nil {
 		p.API.LogError("Failed to set drive change channel data", "userID", userID, "channelData", channelData)
 		return err
@@ -303,13 +296,12 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	return nil
 }
 
-func isWatchChannelDataValid(watchChannelData WatchChannelData) bool {
+func isWatchChannelDataValid(watchChannelData *model.WatchChannelData) bool {
 	return watchChannelData.ChannelID != "" && watchChannelData.Expiration != 0 && watchChannelData.MMUserID != "" && watchChannelData.ResourceID != ""
 }
 
 func (p *Plugin) startDriveActivityNotifications(userID string) string {
-	var watchChannelData WatchChannelData
-	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
+	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
 		return "Something went wrong while starting Google Drive activity notifications. Please contact your organization admin for support."
 	}
@@ -327,8 +319,7 @@ func (p *Plugin) startDriveActivityNotifications(userID string) string {
 }
 
 func (p *Plugin) stopDriveActivityNotifications(userID string) string {
-	var watchChannelData WatchChannelData
-	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
+	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
 		p.API.LogError("Failed to get drive change channel data", "userID", userID)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
@@ -343,7 +334,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	authToken, _ := p.getGoogleUserToken(userID)
 	srv, _ := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 
-	err = p.client.KV.Delete(getWatchChannelDataKey(userID))
+	err = p.KVStore.DeleteWatchChannelData(userID)
 	if err != nil {
 		p.API.LogError("Failed to delete drive watch channel data", "err", err)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
@@ -361,7 +352,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	return "Successfully disabled Google Drive activity notifications."
 }
 
-func (p *Plugin) handleNotifications(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
+func (p *Plugin) handleNotifications(c *plugin.Context, args *mattermostModel.CommandArgs, parameters []string) string {
 	subcommand := parameters[0]
 
 	allowedCommands := []string{"start", "stop"}

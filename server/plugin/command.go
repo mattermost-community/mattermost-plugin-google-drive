@@ -7,13 +7,15 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/command"
 	"github.com/pkg/errors"
+
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/config"
 )
 
 type CommandHandleFunc func(c *plugin.Context, args *model.CommandArgs, parameters []string) string
 
 const commandDescription = "Available commands: connect, disconnect, create, notifications, help, about"
 
-func getAutocompleteData(config *Configuration) *model.AutocompleteData {
+func getAutocompleteData(config *config.Configuration) *model.AutocompleteData {
 	if !config.IsOAuthConfigured() {
 		drive := model.NewAutocompleteData("google-drive", "[command]", "Available commands: setup, about")
 
@@ -65,8 +67,8 @@ func getAutocompleteData(config *Configuration) *model.AutocompleteData {
 	return drive
 }
 
-func (p *Plugin) getCommand(config *Configuration) (*model.Command, error) {
-	iconData, err := command.GetIconData(&p.client.System, "assets/icon-bg.svg")
+func (p *Plugin) getCommand(config *config.Configuration) (*model.Command, error) {
+	iconData, err := command.GetIconData(&p.Client.System, "assets/icon-bg.svg")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get icon data")
 	}
@@ -139,7 +141,7 @@ func (p *Plugin) postCommandResponse(args *model.CommandArgs, text string) {
 		RootId:    args.RootId,
 		Message:   text,
 	}
-	p.client.Post.SendEphemeralPost(args.UserId, post)
+	p.Client.Post.SendEphemeralPost(args.UserId, post)
 }
 
 func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {

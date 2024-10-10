@@ -2,39 +2,38 @@ package plugin
 
 import (
 	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/mattermost/mattermost/server/public/model"
+	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/poster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry"
 	"github.com/pkg/errors"
+
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/config"
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/kvstore"
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 const (
 	WSEventConfigUpdate = "config_update"
 )
 
-type kvStore interface {
-	Set(key string, value any, options ...pluginapi.KVSetOption) (bool, error)
-	ListKeys(page int, count int, options ...pluginapi.ListKeysOption) ([]string, error)
-	Get(key string, o any) error
-	Delete(key string) error
-}
-
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type Plugin struct {
 	plugin.MattermostPlugin
 
-	client *pluginapi.Client
-	store  kvStore
+	Client  *pluginapi.Client
+	KVStore kvstore.KVStore
 
 	configurationLock sync.RWMutex
-	configuration     *Configuration
+	configuration     *config.Configuration
 
 	router *mux.Router
 
@@ -46,7 +45,7 @@ type Plugin struct {
 
 	CommandHandlers map[string]CommandHandleFunc
 
-	flowManager *FlowManager
+	FlowManager *FlowManager
 
 	oauthBroker *OAuthBroker
 
@@ -54,16 +53,16 @@ type Plugin struct {
 }
 
 func (p *Plugin) ensurePluginAPIClient() {
-	if p.client == nil {
-		p.client = pluginapi.NewClient(p.API, p.Driver)
-		p.store = &p.client.KV
+	if p.Client == nil {
+		p.Client = pluginapi.NewClient(p.API, p.Driver)
+		p.KVStore = kvstore.NewKVStore(p.Client)
 	}
 }
 
 func (p *Plugin) setDefaultConfiguration() error {
 	config := p.getConfiguration()
 
-	changed, err := config.setDefaults()
+	changed, err := config.SetDefaults()
 	if err != nil {
 		return err
 	}
@@ -74,7 +73,7 @@ func (p *Plugin) setDefaultConfiguration() error {
 			return err
 		}
 
-		err = p.client.Configuration.SavePluginConfig(configMap)
+		err = p.Client.Configuration.SavePluginConfig(configMap)
 		if err != nil {
 			return err
 		}
@@ -87,7 +86,7 @@ func (p *Plugin) refreshDriveWatchChannels() {
 	page := 0
 	perPage := 100
 
-	worker := func(channels <-chan WatchChannelData, wg *sync.WaitGroup) {
+	worker := func(channels <-chan model.WatchChannelData, wg *sync.WaitGroup) {
 		defer wg.Done()
 		for channel := range channels {
 			_ = p.startDriveWatchChannel(channel.MMUserID)
@@ -96,14 +95,14 @@ func (p *Plugin) refreshDriveWatchChannels() {
 	}
 
 	var wg sync.WaitGroup
-	channels := make(chan WatchChannelData)
+	channels := make(chan model.WatchChannelData)
 	for i := 1; i <= 5; i++ {
 		wg.Add(1)
 		go worker(channels, &wg)
 	}
 
 	for {
-		keys, err := p.client.KV.ListKeys(page, perPage, pluginapi.WithPrefix("drive_change_channels-"))
+		keys, err := p.KVStore.ListWatchChannelDataKeys(page, perPage)
 		if err != nil {
 			p.API.LogError("Failed to list keys", "err", err)
 			break
@@ -114,8 +113,8 @@ func (p *Plugin) refreshDriveWatchChannels() {
 		}
 
 		for _, key := range keys {
-			var watchChannelData WatchChannelData
-			err = p.client.KV.Get(key, &watchChannelData)
+			var watchChannelData model.WatchChannelData
+			err = p.Client.KV.Get(key, &watchChannelData)
 			if err != nil {
 				continue
 			}
@@ -133,7 +132,7 @@ func (p *Plugin) refreshDriveWatchChannels() {
 func (p *Plugin) OnActivate() error {
 	p.ensurePluginAPIClient()
 
-	siteURL := p.client.Configuration.GetConfig().ServiceSettings.SiteURL
+	siteURL := p.Client.Configuration.GetConfig().ServiceSettings.SiteURL
 	if siteURL == nil || *siteURL == "" {
 		return errors.New("siteURL is not set. Please set it and restart the plugin")
 	}
@@ -148,8 +147,8 @@ func (p *Plugin) OnActivate() error {
 
 	p.oauthBroker = NewOAuthBroker(p.sendOAuthCompleteEvent)
 
-	botID, err := p.client.Bot.EnsureBot(&model.Bot{
-		OwnerId:     manifest.Id,
+	botID, err := p.Client.Bot.EnsureBot(&mattermostModel.Bot{
+		OwnerId:     Manifest.Id,
 		Username:    "google-drive",
 		DisplayName: "Google Drive",
 		Description: "Created by the Google Drive plugin.",
@@ -159,9 +158,9 @@ func (p *Plugin) OnActivate() error {
 	}
 	p.BotUserID = botID
 
-	p.poster = poster.NewPoster(&p.client.Post, p.BotUserID)
+	p.poster = poster.NewPoster(&p.Client.Post, p.BotUserID)
 
-	p.flowManager = p.NewFlowManager()
+	p.FlowManager = p.NewFlowManager()
 
 	// google drive watch api doesn't allow indefinite expiry of watch channels
 	// so we need to refresh(close old channel and start new one) them before they get expired
@@ -175,35 +174,124 @@ func (p *Plugin) OnActivate() error {
 func (p *Plugin) OnDeactivate() error {
 	p.oauthBroker.Close()
 	if err := p.telemetryClient.Close(); err != nil {
-		p.client.Log.Warn("Telemetry client failed to close", "error", err.Error())
+		p.Client.Log.Warn("Telemetry client failed to close", "error", err.Error())
 	}
 	if err := p.channelRefreshJob.Close(); err != nil {
-		p.client.Log.Warn("Channel refresh job failed to close", "error", err.Error())
+		p.Client.Log.Warn("Channel refresh job failed to close", "error", err.Error())
 	}
 	return nil
 }
 
-func (p *Plugin) OnInstall(c *plugin.Context, event model.OnInstallEvent) error {
+func (p *Plugin) OnInstall(c *plugin.Context, event mattermostModel.OnInstallEvent) error {
 	conf := p.getConfiguration()
 
 	// Don't start wizard if OAuth is configured
 	if conf.IsOAuthConfigured() {
-		p.client.Log.Debug("OAuth is already configured, skipping setup wizard",
-			"GoogleOAuthClientID", lastN(conf.GoogleOAuthClientID, 4),
-			"GoogleOAuthClientSecret", lastN(conf.GoogleOAuthClientSecret, 4),
+		p.Client.Log.Debug("OAuth is already configured, skipping setup wizard",
+			"GoogleOAuthClientID", utils.LastN(conf.GoogleOAuthClientID, 4),
+			"GoogleOAuthClientSecret", utils.LastN(conf.GoogleOAuthClientSecret, 4),
 		)
 		return nil
 	}
 
-	return p.flowManager.StartSetupWizard(event.UserId)
+	return p.FlowManager.StartSetupWizard(event.UserId)
 }
 
 func (p *Plugin) OnSendDailyTelemetry() {
 	p.SendDailyTelemetry()
 }
 
-func (p *Plugin) OnPluginClusterEvent(c *plugin.Context, ev model.PluginClusterEvent) {
+func (p *Plugin) OnPluginClusterEvent(c *plugin.Context, ev mattermostModel.PluginClusterEvent) {
 	p.HandleClusterEvent(ev)
+}
+
+// getConfiguration retrieves the active configuration under lock, making it safe to use
+// concurrently. The active configuration may change underneath the client of this method, but
+// the struct returned by this API call is considered immutable.
+func (p *Plugin) getConfiguration() *config.Configuration {
+	p.configurationLock.RLock()
+	defer p.configurationLock.RUnlock()
+
+	if p.configuration == nil {
+		return &config.Configuration{}
+	}
+
+	return p.configuration
+}
+
+// setConfiguration replaces the active configuration under lock.
+//
+// Do not call setConfiguration while holding the configurationLock, as sync.Mutex is not
+// reentrant. In particular, avoid using the plugin API entirely, as this may in turn trigger a
+// hook back into the plugin. If that hook attempts to acquire this lock, a deadlock may occur.
+//
+// This method panics if setConfiguration is called with the existing configuration. This almost
+// certainly means that the configuration was modified without being cloned and may result in
+// an unsafe access.
+func (p *Plugin) setConfiguration(configuration *config.Configuration) {
+	p.configurationLock.Lock()
+	defer p.configurationLock.Unlock()
+
+	if configuration != nil && p.configuration == configuration {
+		// Ignore assignment if the configuration struct is empty. Go will optimize the
+		// allocation for same to point at the same memory address, breaking the check
+		// above.
+		if reflect.ValueOf(*configuration).NumField() == 0 {
+			return
+		}
+
+		panic("setConfiguration called with the existing configuration")
+	}
+
+	p.configuration = configuration
+}
+
+// OnConfigurationChange is invoked when configuration changes may have been made.
+func (p *Plugin) OnConfigurationChange() error {
+	p.ensurePluginAPIClient()
+
+	var configuration = new(config.Configuration)
+
+	// Load the public configuration fields from the Mattermost server configuration.
+	err := p.Client.Configuration.LoadPluginConfiguration(configuration)
+	if err != nil {
+		return errors.Wrap(err, "failed to load plugin configuration")
+	}
+
+	configuration.Sanitize()
+
+	p.sendWebsocketEventIfNeeded(p.getConfiguration(), configuration)
+
+	p.setConfiguration(configuration)
+
+	command, err := p.getCommand(configuration)
+	if err != nil {
+		return errors.Wrap(err, "failed to get command")
+	}
+
+	err = p.Client.SlashCommand.Register(command)
+	if err != nil {
+		return errors.Wrap(err, "failed to register command")
+	}
+	// Some config changes require reloading tracking config
+	if p.tracker != nil {
+		p.tracker.ReloadConfig(telemetry.NewTrackerConfig(p.Client.Configuration.GetConfig()))
+	}
+
+	return nil
+}
+
+func (p *Plugin) sendWebsocketEventIfNeeded(oldConfig, newConfig *config.Configuration) {
+	// If the plugin just started, oldConfig is the zero value.
+	// Hence, an unnecessary websocket event is sent.
+	// Given that oldConfig is never nil, that case is hard to catch.
+	if !reflect.DeepEqual(oldConfig.ClientConfiguration(), newConfig.ClientConfiguration()) {
+		p.Client.Frontend.PublishWebSocketEvent(
+			WSEventConfigUpdate,
+			newConfig.ClientConfiguration(),
+			&mattermostModel.WebsocketBroadcast{},
+		)
+	}
 }
 
 func NewPlugin() *Plugin {

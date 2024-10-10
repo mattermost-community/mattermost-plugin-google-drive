@@ -21,14 +21,14 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
-var manifest *model.Manifest
+var Manifest *model.Manifest
 
 const manifestStr = ` + "`" + `
 %s
 ` + "`" + `
 
 func init() {
-	_ = json.NewDecoder(strings.NewReader(manifestStr)).Decode(&manifest)
+	_ = json.NewDecoder(strings.NewReader(manifestStr)).Decode(&Manifest)
 }
 `
 
