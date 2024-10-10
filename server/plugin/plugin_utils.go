@@ -32,7 +32,7 @@ func (p *Plugin) getAllChannelUsers(channelID string) []*model.User {
 	perPage := 100
 	allUsers := make([]*model.User, 0)
 	for {
-		users, appErr := p.API.GetUsers(&model.UserGetOptions{InChannelId: channelID, Page: page, PerPage: perPage})
+		users, appErr := p.API.GetUsersInChannel(channelID, "username", page, perPage)
 		if appErr != nil || len(users) == 0 {
 			break
 		}
