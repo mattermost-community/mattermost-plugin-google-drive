@@ -154,7 +154,7 @@ func (p *Plugin) OnActivate() error {
 		Description: "Created by the Google Drive plugin.",
 	}, pluginapi.ProfileImagePath(filepath.Join("assets", "profile.png")))
 	if err != nil {
-		return errors.Wrap(err, "failed to ensure drive bot")
+		return errors.Wrap(err, "failed to ensure Google Drive bot")
 	}
 	p.BotUserID = botID
 
@@ -162,8 +162,8 @@ func (p *Plugin) OnActivate() error {
 
 	p.FlowManager = p.NewFlowManager()
 
-	// google drive watch api doesn't allow indefinite expiry of watch channels
-	// so we need to refresh(close old channel and start new one) them before they get expired
+	// Google Drive watch api doesn't allow indefinite expiry of watch channels
+	// so we need to refresh (close old channel and start new one) them before they get expired
 	p.channelRefreshJob, err = cluster.Schedule(p.API, "refreshDriveWatchChannelsJob", cluster.MakeWaitForInterval(12*time.Hour), p.refreshDriveWatchChannels)
 	if err != nil {
 		return errors.Wrap(err, "failed to create a scheduled recurring job to refresh watch channels")

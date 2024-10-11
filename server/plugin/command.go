@@ -44,9 +44,9 @@ func getAutocompleteData(config *config.Configuration) *model.AutocompleteData {
 	create.AddCommand(slide)
 	create.AddCommand(sheet)
 
-	notifications := model.NewAutocompleteData("notifications", "[command]", "Configure drive activity notifications")
-	start := model.NewAutocompleteData("start", "", "Start drive activity notifications")
-	stop := model.NewAutocompleteData("stop", "", "Stop drive activity notifications")
+	notifications := model.NewAutocompleteData("notifications", "[command]", "Configure Google Drive activity notifications")
+	start := model.NewAutocompleteData("start", "", "Start Google Drive activity notifications")
+	stop := model.NewAutocompleteData("stop", "", "Stop Google Drive activity notifications")
 	notifications.AddCommand(start)
 	notifications.AddCommand(stop)
 	drive.AddCommand(notifications)

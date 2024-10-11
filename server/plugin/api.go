@@ -284,7 +284,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	if err != nil {
 		c.Log.WithError(err).Warnf("Can't exchange state")
 
-		rErr = errors.Wrap(err, "Failed to exchange oauth code into token")
+		rErr = errors.Wrap(err, "Failed to exchange OAuth code into token")
 		http.Error(w, rErr.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -388,7 +388,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	conf := p.getOAuthConfig()
 	authToken, err := p.getGoogleUserToken(request.UserId)
 	if err != nil {
-		p.API.LogError("Failed to get google user token", "err", err)
+		p.API.LogError("Failed to get Google user token", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -401,7 +401,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		{
 			srv, dErr := docs.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 			if dErr != nil {
-				p.API.LogError("Failed to create google docs client", "err", dErr)
+				p.API.LogError("Failed to create Google Docs client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
@@ -418,7 +418,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		{
 			srv, dErr := slides.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 			if dErr != nil {
-				p.API.LogError("Failed to create google slides client", "err", dErr)
+				p.API.LogError("Failed to create Google Slides client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
@@ -435,7 +435,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		{
 			srv, dErr := sheets.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 			if dErr != nil {
-				p.API.LogError("Failed to create google sheets client", "err", dErr)
+				p.API.LogError("Failed to create Google Sheets client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
@@ -453,7 +453,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	}
 
 	if fileCreationErr != nil {
-		p.API.LogError("Failed to create google drive file", "err", fileCreationErr)
+		p.API.LogError("Failed to create Google Drive file", "err", fileCreationErr)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -497,7 +497,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	conf := p.getOAuthConfig()
 	authToken, err := p.getGoogleUserToken(userID)
 	if err != nil {
-		p.API.LogError("Failed to get google user token", "err", err, "userID", userID)
+		p.API.LogError("Failed to get Google user token", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -584,7 +584,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
 	if err != nil {
 		pageTokenErr = err
-		p.API.LogError("Failed to fetch google drive changes", "err", err, "userID", userID)
+		p.API.LogError("Failed to fetch Google Drive changes", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -745,7 +745,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	conf := p.getOAuthConfig()
 	authToken, err := p.getGoogleUserToken(request.UserId)
 	if err != nil {
-		p.API.LogError("Failed to get google user token", "err", err)
+		p.API.LogError("Failed to get Google user token", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -807,7 +807,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 	conf := p.getOAuthConfig()
 	authToken, err := p.getGoogleUserToken(c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to get google user token", "err", err)
+		p.API.LogError("Failed to get Google user token", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -858,7 +858,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 
 	authToken, err := p.getGoogleUserToken(c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to get google user token", "err", err)
+		p.API.LogError("Failed to get Google user token", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}

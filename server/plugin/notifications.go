@@ -219,7 +219,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create drive service client", "err", err)
+		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return err
 	}
 
@@ -268,7 +268,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	}
 	err = p.KVStore.StoreWatchChannelData(userID, channelData)
 	if err != nil {
-		p.API.LogError("Failed to set drive change channel data", "userID", userID, "channelData", channelData)
+		p.API.LogError("Failed to set Google Drive change channel data", "userID", userID, "channelData", channelData)
 		return err
 	}
 	return nil
@@ -299,7 +299,7 @@ func (p *Plugin) startDriveActivityNotifications(userID string) string {
 func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
-		p.API.LogError("Failed to get drive change channel data", "userID", userID)
+		p.API.LogError("Failed to get Google Drive change channel data", "userID", userID)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
@@ -314,7 +314,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 
 	err = p.KVStore.DeleteWatchChannelData(userID)
 	if err != nil {
-		p.API.LogError("Failed to delete drive watch channel data", "err", err)
+		p.API.LogError("Failed to delete Google Drive watch channel data", "err", err)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
@@ -324,7 +324,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	}).Do()
 
 	if err != nil {
-		p.API.LogError("Failed to stop drive change channel", "err", err)
+		p.API.LogError("Failed to stop Google Drive change channel", "err", err)
 	}
 
 	return "Successfully disabled Google Drive activity notifications."
