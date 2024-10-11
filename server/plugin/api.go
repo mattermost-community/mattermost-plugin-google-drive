@@ -483,13 +483,13 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	token := r.Header.Get("X-Goog-Channel-Token")
 	if watchChannelData.Token != token {
-		p.API.LogError("Invalid channel token")
+		p.API.LogError("Invalid channel token", "userID", userID)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -497,29 +497,29 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	conf := p.getOAuthConfig()
 	authToken, err := p.getGoogleUserToken(userID)
 	if err != nil {
-		p.API.LogError("Failed to get google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
+		p.API.LogError("Failed to get google user token", "err", err, "userID", userID)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
 	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	// Mutex to prevent multiple requests from the same user.
+	// Mutex to prevent race conditions from multiple requests directed at the same user in a short period of time.
 	m, err := cluster.NewMutex(p.API, "drive_watch_notifications_"+userID)
 	if err != nil {
-		p.API.LogError("Failed to create mutex", "err", err)
+		p.API.LogError("Failed to create mutex", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	lockErr := m.LockWithContext(c.Ctx)
 	if lockErr != nil {
-		p.API.LogError("Failed to lock mutex", "err", lockErr)
+		p.API.LogError("Failed to lock mutex", "err", lockErr, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -534,9 +534,10 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	pageToken := watchChannelData.PageToken
 	if pageToken == "" {
+		// This is to catch any edge cases where the pageToken is not set.
 		tokenResponse, tokenErr := srv.Changes.GetStartPageToken().Do()
 		if tokenErr != nil {
-			p.API.LogError("Failed to get start page token", "err", tokenErr)
+			p.API.LogError("Failed to get start page token", "err", tokenErr, "userID", userID)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -548,7 +549,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	for {
 		changeList, changeErr := srv.Changes.List(pageToken).Fields("*").Do()
 		if changeErr != nil {
-			p.API.LogError("Failed to fetch Google Drive changes", "err", changeErr)
+			p.API.LogError("Failed to fetch Google Drive changes", "err", changeErr, "userID", userID)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -557,28 +558,25 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		if changeList.NewStartPageToken != "" {
 			// Updated pageToken gets saved at the end along with the new FileLastActivity.
 			pageToken = changeList.NewStartPageToken
-			p.API.LogDebug("Page tokens", "NewStartPageToken", changeList.NewStartPageToken, "pageToken", pageToken, "lengthOfChangeList.Changes", len(changeList.Changes))
 			break
 		}
-		p.API.LogDebug("NextPageToken populated", "NextPageToken", changeList.NextPageToken)
 		pageToken = changeList.NextPageToken
 	}
 
 	defer func() {
-		// There are instances where we don't want to save the pageToken at the end of the request due to a fatal error.
+		// There are instances where we don't want to save the pageToken at the end of the request due to a fatal error where we didn't process any notifications.
 		if pageTokenErr == nil {
 			watchChannelData.PageToken = pageToken
 		}
 		err = p.KVStore.StoreWatchChannelData(userID, *watchChannelData)
 		if err != nil {
-			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err)
+			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err, "userID", userID)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}()
 
 	if len(changes) == 0 {
-		p.API.LogInfo("No Google Drive changes found", "pageToken", pageToken)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -586,14 +584,13 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
 	if err != nil {
 		pageTokenErr = err
-		p.API.LogError("Failed to fetch google drive changes", "err", err)
+		p.API.LogError("Failed to fetch google drive changes", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	for _, change := range changes {
 		if change.File == nil {
-			p.API.LogDebug("No file found", "pageToken", pageToken)
 			continue
 		}
 
@@ -601,8 +598,8 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		lastChangeTime, _ := time.Parse(time.RFC3339, change.Time)
 		viewedByMeTime, _ := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
 
+		// Check if the user has already opened the file after the last change.
 		if lastChangeTime.Sub(modifiedTime) > lastChangeTime.Sub(viewedByMeTime) {
-			p.API.LogDebug("User has already opened the file after the change.")
 			continue
 		}
 
@@ -610,11 +607,15 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			ItemName: fmt.Sprintf("items/%s", change.FileId),
 		}
 
-		lastActivity := watchChannelData.FileLastActivity[change.FileId]
-		p.API.LogDebug("Last activity", "lastActivity", lastActivity, "fileID", change.FileId)
+		lastActivityTime, err := p.KVStore.GetLastActivityForFile(userID, change.FileId)
+		if err != nil {
+			p.API.LogDebug("Failed to fetch last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
+			continue
+		}
+
 		// If we have a last activity timestamp for this file we can use it to filter the activities.
-		if lastActivity != "" {
-			driveActivityQuery.Filter = "time > \"" + lastActivity + "\""
+		if lastActivityTime != "" {
+			driveActivityQuery.Filter = "time > \"" + lastActivityTime + "\""
 		} else {
 			// PageSize documentation: https://developers.google.com/drive/activity/v2/reference/rest/v2/activity/query#QueryDriveActivityRequest.
 			// TLDR: PageSize does not return the exact number of activities that you specify. LastActivity is not set so lets just get the latest activity.
@@ -623,14 +624,15 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 		var activities []*driveactivity.DriveActivity
 		for {
-			activityRes, err := activitySrv.Activity.Query(driveActivityQuery).Do()
+			var activityRes *driveactivity.QueryDriveActivityResponse
+			activityRes, err = activitySrv.Activity.Query(driveActivityQuery).Do()
 			if err != nil {
-				p.API.LogDebug("Failed to fetch google drive activity", "err", err, "fileID", change.FileId)
+				p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", change.FileId, "userID", userID)
 				continue
 			}
 			activities = append(activities, activityRes.Activities...)
+			// NextPageToken is set when there are more than 1 page of activities for a file. We don't want the next page token if we are only fetching the latest activity.
 			if activityRes.NextPageToken != "" && driveActivityQuery.PageSize != 1 {
-				p.API.LogDebug("NextPageToken populated", "NextPageToken", activityRes.NextPageToken)
 				driveActivityQuery.PageToken = activityRes.NextPageToken
 			} else {
 				break
@@ -638,35 +640,37 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 
 		if len(activities) == 0 {
-			p.API.LogDebug("No activities found for File", "fileID", change.FileId)
 			continue
 		}
-
+		newLastActivityTime := lastActivityTime
 		// Newest activity is at the end of the list so iterate through the list in reverse.
 		for i := len(activities) - 1; i >= 0; i-- {
 			activity := activities[i]
 			if activity.PrimaryActionDetail.Comment != nil {
-				if activity.Timestamp > lastActivity {
-					lastActivity = activity.Timestamp
+				if activity.Timestamp > lastActivityTime {
+					newLastActivityTime = activity.Timestamp
 				}
 				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
 					continue
 				}
-				p.handleCommentNotifications(change.FileId, userID, activity, authToken)
+				p.handleCommentNotifications(srv, change.File, userID, activity)
 			}
 			if activity.PrimaryActionDetail.PermissionChange != nil {
-				if activity.Timestamp > lastActivity {
-					lastActivity = activity.Timestamp
+				if activity.Timestamp > lastActivityTime {
+					newLastActivityTime = activity.Timestamp
 				}
 				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
 					continue
 				}
-				p.handleFileSharedNotification(change.FileId, userID, authToken)
+				p.handleFileSharedNotification(change.File, userID)
 			}
 		}
 
-		if lastActivity > watchChannelData.FileLastActivity[change.FileId] {
-			watchChannelData.FileLastActivity[change.FileId] = lastActivity
+		if newLastActivityTime > lastActivityTime {
+			err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, newLastActivityTime)
+			if err != nil {
+				p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
+			}
 		}
 	}
 
@@ -769,7 +773,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	_, appErr := p.API.CreatePost(&post)
 	if appErr != nil {
 		p.API.LogWarn("Failed to create post", "err", appErr, "channelID", post.ChannelId, "rootId", post.RootId, "message", post.Message)
-		w.WriteHeader(http.StatusInternalServerError)
+		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "Comment created but failed to create post. Please contact your system administrator", StatusCode: http.StatusInternalServerError})
 		return
 	}
 }

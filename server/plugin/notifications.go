@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"golang.org/x/oauth2"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
 	"google.golang.org/api/option"
@@ -162,15 +161,8 @@ func (p *Plugin) handleSuggestionReplyAdded(userID string, activity *driveactivi
 	p.createBotDMPost(userID, message, nil)
 }
 
-func (p *Plugin) handleCommentNotifications(fileID, userID string, activity *driveactivity.DriveActivity, authToken *oauth2.Token) {
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-	dSrv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create drive service client", "err", err)
-		return
-	}
-	file, _ := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime").Do()
+func (p *Plugin) handleCommentNotifications(dSrv *drive.Service, file *drive.File, userID string, activity *driveactivity.DriveActivity) {
+	fileID := file.Id
 
 	if ok := activity.PrimaryActionDetail.Comment.Post != nil; !ok {
 		return
@@ -202,21 +194,8 @@ func (p *Plugin) handleCommentNotifications(fileID, userID string, activity *dri
 	}
 }
 
-func (p *Plugin) handleFileSharedNotification(fileID, userID string, authToken *oauth2.Token) {
-	ctx := context.Background()
+func (p *Plugin) handleFileSharedNotification(file *drive.File, userID string) {
 	config := p.API.GetConfig()
-	conf := p.getOAuthConfig()
-	dSrv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create drive service client", "err", err)
-		return
-	}
-	file, err := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime", "sharingUser").Do()
-	if err != nil {
-		p.API.LogError("Failed to fetch file", "err", err, "fileID", fileID)
-		return
-	}
-
 	userDisplay := p.getUserDisplayName(file.SharingUser, config)
 
 	p.createBotDMPost(userID, userDisplay+" shared an item with you", map[string]any{
@@ -280,13 +259,12 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	}
 
 	channelData := model.WatchChannelData{
-		ChannelID:        channel.Id,
-		ResourceID:       channel.ResourceId,
-		Expiration:       channel.Expiration,
-		Token:            channel.Token,
-		MMUserID:         userID,
-		PageToken:        startPageToken.StartPageToken,
-		FileLastActivity: map[string]string{},
+		ChannelID:  channel.Id,
+		ResourceID: channel.ResourceId,
+		Expiration: channel.Expiration,
+		Token:      channel.Token,
+		MMUserID:   userID,
+		PageToken:  startPageToken.StartPageToken,
 	}
 	err = p.KVStore.StoreWatchChannelData(userID, channelData)
 	if err != nil {

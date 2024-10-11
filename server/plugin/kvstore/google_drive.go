@@ -28,6 +28,10 @@ func getUserTokenKey(userID string) string {
 	return fmt.Sprintf("%s_token", userID)
 }
 
+func getLastActivityKey(userID, fileID string) string {
+	return fmt.Sprintf("last_activity-%s-%s", userID, fileID)
+}
+
 func (kv Impl) GetWatchChannelData(userID string) (*model.WatchChannelData, error) {
 	var watchChannelData model.WatchChannelData
 
@@ -63,6 +67,27 @@ func (kv Impl) DeleteWatchChannelData(userID string) error {
 		return errors.Wrap(err, "failed to delete watch channel data")
 	}
 	return nil
+}
+
+func (kv Impl) StoreLastActivityForFile(userID, fileID, activityTime string) error {
+	key := getLastActivityKey(userID, fileID)
+	saved, err := kv.client.KV.Set(key, activityTime)
+	if !saved && err != nil {
+		return errors.Wrap(err, "database error occurred when trying to save last activity for file")
+	} else if !saved && err == nil {
+		return errors.New("Failed to save last activity for file")
+	}
+	return nil
+}
+
+func (kv Impl) GetLastActivityForFile(userID, fileID string) (string, error) {
+	var activityTime string
+
+	err := kv.client.KV.Get(getLastActivityKey(userID, fileID), &activityTime)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get last activity for file")
+	}
+	return activityTime, nil
 }
 
 func (kv Impl) StoreOAuthStateToken(key, value string) error {
