@@ -1,12 +1,12 @@
-# Mattermost Google Drive Plugin 
+# Mattermost Google Drive Plugin
 
-[![CircleCI branch](https://img.shields.io/circleci/project/github/darkLord19/mattermost-plugin-google-drive/master.svg)](https://circleci.com/gh/darkLord19/mattermost-plugin-google-drive)
-[![Release](https://img.shields.io/github/v/release/darkLord19/mattermost-plugin-google-drive)](https://github.com/darkLord19/mattermost-plugin-google-drive/releases/latest)
-[![Go Report Card](https://goreportcard.com/badge/github.com/darkLord19/mattermost-plugin-google-drive)](https://goreportcard.com/report/github.com/darkLord19/mattermost-plugin-google-drive)
-[![HW](https://img.shields.io/github/issues/darkLord19/mattermost-plugin-google-drive/Up%20For%20Grabs?color=dark%20green&label=Help%20Wanted)](https://github.com/darkLord19/mattermost-plugin-google-drive/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22Up+For+Grabs%22+label%3A%22Help+Wanted%22)
+[![CircleCI branch](https://img.shields.io/circleci/project/github/mattermost/mattermost-plugin-google-drive/master.svg)](https://circleci.com/gh/mattermost/mattermost-plugin-google-drive)
+[![Release](https://img.shields.io/github/v/release/mattermost/mattermost-plugin-google-drive)](https://github.com/mattermost-community/mattermost-plugin-google-drive/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mattermost-community/mattermost-plugin-google-drive)](https://goreportcard.com/report/github.com/mattermost-community/mattermost-plugin-google-drive)
+[![HW](https://img.shields.io/github/issues/mattermost/mattermost-plugin-google-drive/Up%20For%20Grabs?color=dark%20green&label=Help%20Wanted)](https://github.com/mattermost-community/mattermost-plugin-google-drive/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22Up+For+Grabs%22+label%3A%22Help+Wanted%22)
 [![Mattermost Community Channel](https://img.shields.io/badge/Mattermost%20Community-~Plugin%3A%20GoogleDrive-blue)](https://community.mattermost.com/core/channels/plugin-googledrive)
 
-**Help Wanted Tickets [here](https://github.com/darkLord19/mattermost-plugin-google-drive/issues)**
+**Help Wanted Tickets [here](https://github.com/mattermost-community/mattermost-plugin-google-drive/issues)**
 
 # Contents
 
@@ -69,13 +69,13 @@ After your System Admin has configured the Google Drive plugin, run `/google-dri
 
 Wanting to share feedback on this plugin?
 
-Feel free to create a [GitHub Issue](https://github.com/darkLord19/mattermost-plugin-google-drive/issues) or join the [Google Drive Plugin channel](https://community.mattermost.com/core/channels/plugin-googledrive) on the Mattermost Community server to discuss.
+Feel free to create a [GitHub Issue](https://github.com/mattermost-community/mattermost-plugin-google-drive/issues) or join the [Google Drive Plugin channel](https://community.mattermost.com/core/channels/plugin-googledrive) on the Mattermost Community server to discuss.
 
 ## Contribute
 
 ### I saw a bug, I have a feature request or a suggestion
 
-Please fill a [GitHub issue](https://github.com/mattermost/mattermost-plugin-google-drive/issues/new/choose), it will be very useful!
+Please fill a [GitHub issue](https://github.com/mattermost-community/mattermost-plugin-google-drive/issues/new/choose), it will be very useful!
 
 ### Development
 
