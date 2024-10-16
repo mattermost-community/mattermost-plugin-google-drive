@@ -1,6 +1,5 @@
 # Mattermost Google Drive Plugin
 
-[![CircleCI branch](https://img.shields.io/circleci/project/github/mattermost/mattermost-plugin-google-drive/master.svg)](https://circleci.com/gh/mattermost/mattermost-plugin-google-drive)
 [![Release](https://img.shields.io/github/v/release/mattermost/mattermost-plugin-google-drive)](https://github.com/mattermost-community/mattermost-plugin-google-drive/releases/latest)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mattermost-community/mattermost-plugin-google-drive)](https://goreportcard.com/report/github.com/mattermost-community/mattermost-plugin-google-drive)
 [![HW](https://img.shields.io/github/issues/mattermost/mattermost-plugin-google-drive/Up%20For%20Grabs?color=dark%20green&label=Help%20Wanted)](https://github.com/mattermost-community/mattermost-plugin-google-drive/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22Up+For+Grabs%22+label%3A%22Help+Wanted%22)
