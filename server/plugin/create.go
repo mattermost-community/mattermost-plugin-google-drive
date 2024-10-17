@@ -21,12 +21,12 @@ func (p *Plugin) sendFileCreatedMessage(channelID, fileID, userID, message strin
 	conf := p.getOAuthConfig()
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
-		p.API.LogError("failed to create drive client", "err", err)
+		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return err
 	}
 	file, err := srv.Files.Get(fileID).Fields("webViewLink", "id", "owners", "permissions", "name", "iconLink", "thumbnailLink", "createdTime").Do()
 	if err != nil {
-		p.API.LogError("failed to fetch  file", "err", err, "fileID", err)
+		p.API.LogError("Failed to fetch  file", "err", err, "fileID", fileID)
 		return err
 	}
 
@@ -49,7 +49,7 @@ func (p *Plugin) sendFileCreatedMessage(channelID, fileID, userID, message strin
 		}
 		_, appErr := p.API.CreatePost(&post)
 		if appErr != nil {
-			p.API.LogWarn("failed to create post", "err", err, "channelID", post.ChannelId, "rootId", post.RootId, "message", post.Message)
+			p.API.LogWarn("Failed to create post", "err", appErr, "channelID", post.ChannelId, "rootId", post.RootId, "message", post.Message)
 			return errors.New(appErr.DetailedError)
 		}
 	} else {
@@ -131,14 +131,14 @@ func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess 
 	authToken, _ := p.getGoogleUserToken(userID)
 	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 	if err != nil {
-		p.API.LogError("failed to create drive client", "err", err)
+		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return err
 	}
 
 	for _, permission := range permissions {
 		_, err := srv.Permissions.Create(fileID, permission).Do()
 		if err != nil {
-			p.API.LogError("something went wrong while updating permissions for file", "err", err, "fileID", fileID)
+			p.API.LogError("Something went wrong while updating permissions for file", "err", err, "fileID", fileID)
 			return err
 		}
 	}
@@ -225,7 +225,7 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 
 	appErr := p.API.OpenInteractiveDialog(dialog)
 	if appErr != nil {
-		p.API.LogWarn("failed to open interactive dialog", "err", appErr.DetailedError)
+		p.API.LogWarn("Failed to open interactive dialog", "err", appErr.DetailedError)
 		return "Failed to open file creation dialog"
 	}
 	return ""

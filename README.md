@@ -60,8 +60,8 @@ After your System Admin has configured the Google Drive plugin, run `/google-dri
 | `/google-drive notifications stop`             | Disable Google Drive activity notifications.  |
 
 #### Post menu bindings
-`Upload file to Google drive`:: This option is available in any post to upload any attached files directly to your google drive. You will be prompted with a dropdown to choose the attachment you want to upload.
-`Upload all files to Google drive`:: This option is available in any post to upload all the attached files directly to your google drive. You will be prompted with a confirmation to upload all the attached files.
+`Upload file to Google drive`:: This option is available in any post to upload any attached files directly to your Google Drive. You will be prompted with a dropdown to choose the attachment you want to upload.
+`Upload all files to Google drive`:: This option is available in any post to upload all the attached files directly to your Google Drive. You will be prompted with a confirmation to upload all the attached files.
 
 
 #### How do I share feedback on this plugin?
