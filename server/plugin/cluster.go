@@ -17,7 +17,7 @@ func (p *Plugin) sendOAuthCompleteEvent(event OAuthCompleteEvent) {
 func (p *Plugin) sendMessageToCluster(id string, v interface{}) {
 	b, err := json.Marshal(v)
 	if err != nil {
-		p.client.Log.Warn("couldn't get JSON bytes from cluster message",
+		p.Client.Log.Warn("couldn't get JSON bytes from cluster message",
 			"id", id,
 			"error", err,
 		)
@@ -29,8 +29,8 @@ func (p *Plugin) sendMessageToCluster(id string, v interface{}) {
 		SendType: model.PluginClusterEventSendTypeReliable,
 	}
 
-	if err := p.client.Cluster.PublishPluginEvent(event, opts); err != nil {
-		p.client.Log.Warn("error publishing cluster event",
+	if err := p.Client.Cluster.PublishPluginEvent(event, opts); err != nil {
+		p.Client.Log.Warn("error publishing cluster event",
 			"id", id,
 			"error", err,
 		)
@@ -42,12 +42,12 @@ func (p *Plugin) HandleClusterEvent(ev model.PluginClusterEvent) {
 	case oauthCompleteEventID:
 		var event OAuthCompleteEvent
 		if err := json.Unmarshal(ev.Data, &event); err != nil {
-			p.client.Log.Warn("cannot unmarshal cluster event with OAuth complete event", "error", err)
+			p.Client.Log.Warn("cannot unmarshal cluster event with OAuth complete event", "error", err)
 			return
 		}
 
 		p.oauthBroker.publishOAuthComplete(event.UserID, event.Err, true)
 	default:
-		p.client.Log.Warn("unknown cluster event", "id", ev.Id)
+		p.Client.Log.Warn("unknown cluster event", "id", ev.Id)
 	}
 }

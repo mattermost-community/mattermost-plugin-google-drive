@@ -1,4 +1,4 @@
-package plugin
+package utils
 
 import (
 	"bytes"
@@ -12,19 +12,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getUserTokenKey(userID string) string {
-	return fmt.Sprintf("%s_token", userID)
-}
-
-func getWatchChannelDataKey(userID string) string {
-	return fmt.Sprintf("drive_change_channels-%s", userID)
-}
-
-func getInlineImage(text, imageURL string) string {
+func GetInlineImage(text, imageURL string) string {
 	return fmt.Sprintf("![%s](%s)", text, imageURL)
 }
 
-func getHyperlink(text, url string) string {
+func GetHyperlink(text, url string) string {
 	return fmt.Sprintf("[%s](%s)", text, url)
 }
 
@@ -34,7 +26,7 @@ func pad(src []byte) []byte {
 	return append(src, padtext...)
 }
 
-func encrypt(key []byte, text string) (string, error) {
+func Encrypt(key []byte, text string) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", errors.Wrap(err, "could not create a cipher block, check key")
@@ -64,7 +56,7 @@ func unpad(src []byte) ([]byte, error) {
 	return src[:(length - unpadding)], nil
 }
 
-func decrypt(key []byte, text string) (string, error) {
+func Decrypt(key []byte, text string) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", errors.Wrap(err, "could not create a cipher block, check key")
@@ -93,9 +85,9 @@ func decrypt(key []byte, text string) (string, error) {
 	return string(unpadMsg), nil
 }
 
-// // lastN returns the last n characters of a string, with the rest replaced by *.
-// // At most 3 characters are replaced. The rest is cut off.
-func lastN(s string, n int) string {
+// LastN returns the last n characters of a string, with the rest replaced by *.
+// At most 3 characters are replaced. The rest is cut off.
+func LastN(s string, n int) string {
 	if n < 0 {
 		return ""
 	}
