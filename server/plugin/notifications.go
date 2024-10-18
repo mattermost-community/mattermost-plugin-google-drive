@@ -8,20 +8,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mattermost/mattermost/server/public/model"
+	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"golang.org/x/oauth2"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
 	"google.golang.org/api/option"
-)
 
-type WatchChannelData struct {
-	ChannelID  string `json:"channel_id"`
-	ResourceID string `json:"resource_id"`
-	MMUserID   string `json:"mm_user_id"`
-	Expiration int64  `json:"expiration"`
-}
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
+)
 
 func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	if len(activity.Targets) == 0 ||
@@ -43,13 +38,13 @@ func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, 
 	props := map[string]any{
 		"attachments": []any{
 			map[string]any{
-				"pretext": fmt.Sprintf("%s commented on %s %s", comment.Author.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, file.WebViewLink)),
+				"pretext": fmt.Sprintf("%s commented on %s %s", comment.Author.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, file.WebViewLink)),
 				"text":    fmt.Sprintf("%s\n> %s", quotedValue, comment.Content),
 				"actions": []any{
 					map[string]any{
 						"name": "Reply to comment",
 						"integration": map[string]any{
-							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, manifest.Id),
+							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id),
 							"context": map[string]any{
 								"commentID": commentID,
 								"fileID":    fileID,
@@ -65,7 +60,7 @@ func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, 
 
 func (p *Plugin) handleDeletedComment(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("A comment was deleted in %s %s", getInlineImage("Google failed:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("A comment was deleted in %s %s", utils.GetInlineImage("Google failed:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
@@ -84,23 +79,27 @@ func (p *Plugin) handleReplyAdded(dSrv *drive.Service, fileID, userID string, ac
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
 	lastReply := ""
+	lastReplyAuthor := ""
 	onBeforeLast := ""
 	if len(comment.Replies) > 0 {
 		lastReply = comment.Replies[len(comment.Replies)-1].Content
+		lastReplyAuthor = comment.Replies[len(comment.Replies)-1].Author.DisplayName
 		if len(comment.Replies) > 1 {
 			onBeforeLast = comment.Replies[len(comment.Replies)-2].Content
+		} else {
+			onBeforeLast = comment.Content
 		}
 	}
 	props := map[string]any{
 		"attachments": []any{
 			map[string]any{
-				"pretext": fmt.Sprintf("%s replied on %s %s", comment.Author.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment)),
+				"pretext": fmt.Sprintf("%s replied on %s %s", lastReplyAuthor, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment)),
 				"text":    fmt.Sprintf("Previous reply:\n%s\n> %s", onBeforeLast, lastReply),
 				"actions": []any{
 					map[string]any{
 						"name": "Reply to comment",
 						"integration": map[string]any{
-							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, manifest.Id),
+							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id),
 							"context": map[string]any{
 								"commentID": commentID,
 								"fileID":    fileID,
@@ -116,7 +115,7 @@ func (p *Plugin) handleReplyAdded(dSrv *drive.Service, fileID, userID string, ac
 
 func (p *Plugin) handleReplyDeleted(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("A comment reply was deleted in %s %s", getInlineImage("Google failed:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("A comment reply was deleted in %s %s", utils.GetInlineImage("Google failed:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
@@ -134,7 +133,7 @@ func (p *Plugin) handleResolvedComment(dSrv *drive.Service, fileID, userID strin
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("%s marked a thread as resolved in %s %s", comment.Author.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("%s marked a thread as resolved in %s %s", comment.Author.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
@@ -152,26 +151,22 @@ func (p *Plugin) handleReopenedComment(dSrv *drive.Service, fileID, userID strin
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("%s reopened a thread in %s %s", comment.Author.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("%s reopened a thread in %s %s", comment.Author.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
 func (p *Plugin) handleSuggestionReplyAdded(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("%s added a new suggestion in %s %s", file.LastModifyingUser.DisplayName, getInlineImage("File icon:", file.IconLink), getHyperlink(file.Name, urlToComment))
+	message := fmt.Sprintf("%s added a new suggestion in %s %s", file.LastModifyingUser.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
 	p.createBotDMPost(userID, message, nil)
 }
 
-func (p *Plugin) handleCommentNotifications(fileID, userID string, activity *driveactivity.DriveActivity, authToken *oauth2.Token) {
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-	dSrv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive client", "err", err)
+func (p *Plugin) handleCommentNotifications(dSrv *drive.Service, file *drive.File, userID string, activity *driveactivity.DriveActivity) {
+	fileID := file.Id
+
+	if ok := activity.PrimaryActionDetail.Comment.Post != nil; !ok {
 		return
 	}
-	file, _ := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime").Do()
-
 	postSubType := activity.PrimaryActionDetail.Comment.Post.Subtype
 
 	switch postSubType {
@@ -199,25 +194,11 @@ func (p *Plugin) handleCommentNotifications(fileID, userID string, activity *dri
 	}
 }
 
-func (p *Plugin) handleFileSharedNotification(fileID, userID string, authToken *oauth2.Token) {
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-	dSrv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive client", "err", err)
-		return
-	}
-	file, err := dSrv.Files.Get(fileID).Fields("webViewLink", "id", "permissions", "name", "iconLink", "createdTime").Do()
-	if err != nil {
-		p.API.LogError("Failed to fetch file", "err", err, "fileID", fileID)
-		return
-	}
+func (p *Plugin) handleFileSharedNotification(file *drive.File, userID string) {
+	config := p.API.GetConfig()
+	userDisplay := p.getUserDisplayName(file.SharingUser, config)
 
-	author := file.SharingUser
-	userDisplay := p.getUserDisplayName(author)
-	message := userDisplay + " shared an item with you"
-
-	p.createBotDMPost(userID, message, map[string]any{
+	p.createBotDMPost(userID, userDisplay+" shared an item with you", map[string]any{
 		"attachments": []any{map[string]any{
 			"title":       file.Name,
 			"title_link":  file.WebViewLink,
@@ -248,7 +229,7 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 		return err
 	}
 
-	url, err := url.Parse(fmt.Sprintf("%s/plugins/%s/api/v1/webhook", *p.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id))
+	url, err := url.Parse(fmt.Sprintf("%s/plugins/%s/api/v1/webhook", *p.Client.Configuration.GetConfig().ServiceSettings.SiteURL, Manifest.Id))
 	if err != nil {
 		p.API.LogError("Failed to parse webhook url", "err", err)
 		return err
@@ -256,12 +237,14 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	query := url.Query()
 	query.Add("userID", userID)
 	url.RawQuery = query.Encode()
+	token := mattermostModel.NewRandomString(64)
 
 	requestChannel := drive.Channel{
 		Kind:       "api#channel",
 		Address:    url.String(),
 		Payload:    true,
 		Id:         uuid.NewString(),
+		Token:      token,
 		Type:       "web_hook",
 		Expiration: time.Now().Add(604800 * time.Second).UnixMilli(),
 		Params: map[string]string{
@@ -275,13 +258,15 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 		return err
 	}
 
-	channelData := WatchChannelData{
+	channelData := model.WatchChannelData{
 		ChannelID:  channel.Id,
 		ResourceID: channel.ResourceId,
 		Expiration: channel.Expiration,
+		Token:      channel.Token,
 		MMUserID:   userID,
+		PageToken:  startPageToken.StartPageToken,
 	}
-	_, err = p.client.KV.Set(getWatchChannelDataKey(userID), channelData)
+	err = p.KVStore.StoreWatchChannelData(userID, channelData)
 	if err != nil {
 		p.API.LogError("Failed to set Google Drive change channel data", "userID", userID, "channelData", channelData)
 		return err
@@ -289,13 +274,12 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 	return nil
 }
 
-func isWatchChannelDataValid(watchChannelData WatchChannelData) bool {
+func isWatchChannelDataValid(watchChannelData *model.WatchChannelData) bool {
 	return watchChannelData.ChannelID != "" && watchChannelData.Expiration != 0 && watchChannelData.MMUserID != "" && watchChannelData.ResourceID != ""
 }
 
 func (p *Plugin) startDriveActivityNotifications(userID string) string {
-	var watchChannelData WatchChannelData
-	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
+	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
 		return "Something went wrong while starting Google Drive activity notifications. Please contact your organization admin for support."
 	}
@@ -313,8 +297,7 @@ func (p *Plugin) startDriveActivityNotifications(userID string) string {
 }
 
 func (p *Plugin) stopDriveActivityNotifications(userID string) string {
-	var watchChannelData WatchChannelData
-	err := p.client.KV.Get(getWatchChannelDataKey(userID), &watchChannelData)
+	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
 		p.API.LogError("Failed to get Google Drive change channel data", "userID", userID)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
@@ -329,7 +312,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	authToken, _ := p.getGoogleUserToken(userID)
 	srv, _ := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
 
-	err = p.client.KV.Delete(getWatchChannelDataKey(userID))
+	err = p.KVStore.DeleteWatchChannelData(userID)
 	if err != nil {
 		p.API.LogError("Failed to delete Google Drive watch channel data", "err", err)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
@@ -347,7 +330,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 	return "Successfully disabled Google Drive activity notifications."
 }
 
-func (p *Plugin) handleNotifications(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
+func (p *Plugin) handleNotifications(c *plugin.Context, args *mattermostModel.CommandArgs, parameters []string) string {
 	subcommand := parameters[0]
 
 	allowedCommands := []string{"start", "stop"}

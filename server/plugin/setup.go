@@ -8,7 +8,7 @@ import (
 )
 
 func (p *Plugin) isAuthorizedSysAdmin(userID string) (bool, error) {
-	user, err := p.client.User.Get(userID)
+	user, err := p.Client.User.Get(userID)
 	if err != nil {
 		return false, err
 	}
@@ -22,7 +22,7 @@ func (p *Plugin) handleSetup(c *plugin.Context, args *model.CommandArgs, paramet
 	userID := args.UserId
 	isSysAdmin, err := p.isAuthorizedSysAdmin(userID)
 	if err != nil {
-		p.client.Log.Warn("Failed to check if user is System Admin", "error", err.Error())
+		p.Client.Log.Warn("Failed to check if user is System Admin", "error", err.Error())
 		return "Error checking user's permissions"
 	}
 
@@ -30,7 +30,7 @@ func (p *Plugin) handleSetup(c *plugin.Context, args *model.CommandArgs, paramet
 		return "Only System Admins are allowed to set up the plugin."
 	}
 
-	err = p.flowManager.StartSetupWizard(userID)
+	err = p.FlowManager.StartSetupWizard(userID)
 
 	if err != nil {
 		return err.Error()

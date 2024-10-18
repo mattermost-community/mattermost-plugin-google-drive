@@ -191,7 +191,7 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 
 	dialog := model.OpenDialogRequest{
 		TriggerId: args.TriggerId,
-		URL:       fmt.Sprintf("/plugins/%s/api/v1/create?type=%s", manifest.Id, subcommand),
+		URL:       fmt.Sprintf("/plugins/%s/api/v1/create?type=%s", Manifest.Id, subcommand),
 		Dialog: model.Dialog{
 			CallbackId:     fmt.Sprintf("create_%s", subcommand),
 			Title:          fmt.Sprintf("Create a Google %s", cases.Title(language.English, cases.NoLower).String(subcommand)),

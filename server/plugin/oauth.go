@@ -33,13 +33,14 @@ func (p *Plugin) getOAuthConfig() *oauth2.Config {
 		"https://www.googleapis.com/auth/documents",
 		"https://www.googleapis.com/auth/presentations",
 		"https://www.googleapis.com/auth/spreadsheets",
+		"https://www.googleapis.com/auth/drive",
 	}
 
 	return &oauth2.Config{
 		ClientID:     config.GoogleOAuthClientID,
 		ClientSecret: config.GoogleOAuthClientSecret,
 		Scopes:       scopes,
-		RedirectURL:  fmt.Sprintf("%s/plugins/%s/oauth/complete", *p.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id),
+		RedirectURL:  fmt.Sprintf("%s/plugins/%s/oauth/complete", *p.Client.Configuration.GetConfig().ServiceSettings.SiteURL, Manifest.Id),
 		Endpoint:     google.Endpoint,
 	}
 }
