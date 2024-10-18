@@ -32,7 +32,7 @@ type Client struct {
 	driveLimiter *rate.Limiter
 }
 
-type GoogleServiceBase struct {
+type googleServiceBase struct {
 	serviceType string
 	limiter     *rate.Limiter
 	papi        plugin.API
@@ -77,7 +77,7 @@ func (g *Client) NewDriveService(ctx context.Context, userID string) (*DriveServ
 
 	return &DriveService{
 		service: srv,
-		GoogleServiceBase: GoogleServiceBase{
+		googleServiceBase: googleServiceBase{
 			serviceType: driveServiceType,
 			papi:        g.papi,
 			limiter:     g.driveLimiter,
@@ -106,7 +106,7 @@ func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (*DriveSe
 
 	return &DriveServiceV2{
 		serviceV2: srv,
-		GoogleServiceBase: GoogleServiceBase{
+		googleServiceBase: googleServiceBase{
 			serviceType: driveServiceType,
 			papi:        g.papi,
 			limiter:     g.driveLimiter,
@@ -129,7 +129,7 @@ func (g *Client) NewDocsService(ctx context.Context, userID string) (*DocsServic
 
 	return &DocsService{
 		service: srv,
-		GoogleServiceBase: GoogleServiceBase{
+		googleServiceBase: googleServiceBase{
 			serviceType: docsServiceType,
 			papi:        g.papi,
 			limiter:     nil,
@@ -152,7 +152,7 @@ func (g *Client) NewSlidesService(ctx context.Context, userID string) (*SlidesSe
 
 	return &SlidesService{
 		service: srv,
-		GoogleServiceBase: GoogleServiceBase{
+		googleServiceBase: googleServiceBase{
 			serviceType: slidesServiceType,
 			papi:        g.papi,
 			limiter:     nil,
@@ -175,7 +175,7 @@ func (g *Client) NewSheetsService(ctx context.Context, userID string) (*SheetsSe
 
 	return &SheetsService{
 		service: srv,
-		GoogleServiceBase: GoogleServiceBase{
+		googleServiceBase: googleServiceBase{
 			serviceType: sheetsServiceType,
 			papi:        g.papi,
 			limiter:     nil,
@@ -198,7 +198,7 @@ func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (*D
 
 	return &DriveActivityService{
 		service: srv,
-		GoogleServiceBase: GoogleServiceBase{
+		googleServiceBase: googleServiceBase{
 			serviceType: driveActivityServiceType,
 			papi:        g.papi,
 			limiter:     nil,
@@ -229,7 +229,7 @@ func (g *Client) getGoogleUserToken(userID string) (*oauth2.Token, error) {
 	return &oauthToken, err
 }
 
-func (ds GoogleServiceBase) parseGoogleErrors(err error) {
+func (ds googleServiceBase) parseGoogleErrors(err error) {
 	if googleErr, ok := err.(*googleapi.Error); ok {
 		reason := ""
 		if len(googleErr.Errors) > 0 {
@@ -278,7 +278,7 @@ func (ds GoogleServiceBase) parseGoogleErrors(err error) {
 	}
 }
 
-func (ds GoogleServiceBase) checkRateLimits(ctx context.Context) error {
+func (ds googleServiceBase) checkRateLimits(ctx context.Context) error {
 	if ds.limiter == nil {
 		return nil
 	}

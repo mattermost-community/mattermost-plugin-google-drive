@@ -12,12 +12,12 @@ import (
 
 type DriveService struct {
 	service *drive.Service
-	GoogleServiceBase
+	googleServiceBase
 }
 
 type DriveServiceV2 struct {
 	serviceV2 *driveV2.Service
-	GoogleServiceBase
+	googleServiceBase
 }
 
 func (ds DriveService) About(ctx context.Context, fields googleapi.Field) (*drive.About, error) {

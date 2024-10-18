@@ -6,7 +6,7 @@ import (
 
 type SlidesService struct {
 	service *slides.Service
-	GoogleServiceBase
+	googleServiceBase
 }
 
 func (ds *SlidesService) Create(presentation *slides.Presentation) (*slides.Presentation, error) {

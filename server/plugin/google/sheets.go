@@ -6,7 +6,7 @@ import (
 
 type SheetsService struct {
 	service *sheets.Service
-	GoogleServiceBase
+	googleServiceBase
 }
 
 func (ds *SheetsService) Create(spreadsheet *sheets.Spreadsheet) (*sheets.Spreadsheet, error) {

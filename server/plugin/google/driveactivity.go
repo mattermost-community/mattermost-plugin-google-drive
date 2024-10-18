@@ -6,7 +6,7 @@ import (
 
 type DriveActivityService struct {
 	service *driveactivity.Service
-	GoogleServiceBase
+	googleServiceBase
 }
 
 func (ds *DriveActivityService) Query(request *driveactivity.QueryDriveActivityRequest) (*driveactivity.QueryDriveActivityResponse, error) {

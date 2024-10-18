@@ -6,7 +6,7 @@ import (
 
 type DocsService struct {
 	service *docs.Service
-	GoogleServiceBase
+	googleServiceBase
 }
 
 func (ds *DocsService) Create(doc *docs.Document) (*docs.Document, error) {
