@@ -3,99 +3,21 @@ package google
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 
-	"github.com/mattermost/mattermost/server/public/plugin"
-
-	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore"
-	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
-
-	"golang.org/x/time/rate"
+	driveV2 "google.golang.org/api/drive/v2"
 	"google.golang.org/api/drive/v3"
+
 	"google.golang.org/api/googleapi"
 )
 
 type DriveService struct {
 	service *drive.Service
-	limiter *rate.Limiter
-	papi    plugin.API
-	userID  string
-	kvstore kvstore.KVStore
+	GoogleServiceBase
 }
 
-func (ds DriveService) parseGoogleErrors(err error) {
-	if googleErr, ok := err.(*googleapi.Error); ok {
-		reason := ""
-		if len(googleErr.Errors) > 0 {
-			for _, error := range googleErr.Errors {
-				if error.Reason != "" {
-					reason = error.Reason
-					break
-				}
-			}
-		}
-		if reason == "userRateLimitExceeded" {
-			err = ds.kvstore.StoreUserRateLimitExceeded(ds.userID)
-			if err != nil {
-				ds.papi.LogError("Failed to store user rate limit exceeded", "userID", ds.userID, "err", err)
-				return
-			}
-		}
-		if reason == "rateLimitExceeded" && len(googleErr.Details) > 0 {
-			for _, detail := range googleErr.Details {
-				byteData, _ := json.Marshal(detail)
-				var errDetail *model.ErrorDetail
-				jsonErr := json.Unmarshal(byteData, &errDetail)
-				if jsonErr != nil {
-					ds.papi.LogError("Failed to parse error details", "err", jsonErr)
-					continue
-				}
-
-				if errDetail != nil {
-					// Even if the original "reason" is rateLimitExceeded, we need to check the QuotaLimit field in the metadata because it might only apply to this specific user.
-					if errDetail.Reason == "RATE_LIMIT_EXCEEDED" && errDetail.Metadata.QuotaLimit == "defaultPerMinutePerUser" {
-						err = ds.kvstore.StoreUserRateLimitExceeded(ds.userID)
-						if err != nil {
-							ds.papi.LogError("Failed to store user rate limit exceeded", "userID", ds.userID, "err", err)
-							return
-						}
-					} else if errDetail.Reason == "RATE_LIMIT_EXCEEDED" && errDetail.Metadata.QuotaLimit == "defaultPerMinutePerProject" {
-						err = ds.kvstore.StoreProjectRateLimitExceeded()
-						if err != nil {
-							ds.papi.LogError("Failed to store rate limit exceeded", "err", err)
-							return
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-func (ds DriveService) checkRateLimits(ctx context.Context) error {
-	userIsRateLimited, err := ds.kvstore.GetUserRateLimitExceeded(ds.userID)
-	if err != nil {
-		return err
-	}
-	if userIsRateLimited {
-		return errors.New("user rate limit exceeded")
-	}
-
-	projectIsRateLimited, err := ds.kvstore.GetProjectRateLimitExceeded()
-	if err != nil {
-		return err
-	}
-	if projectIsRateLimited {
-		return errors.New("project rate limit exceeded")
-	}
-
-	err = ds.limiter.WaitN(ctx, 1)
-	if err != nil {
-		return err
-	}
-
-	return nil
+type DriveServiceV2 struct {
+	serviceV2 *driveV2.Service
+	GoogleServiceBase
 }
 
 func (ds DriveService) About(ctx context.Context, fields googleapi.Field) (*drive.About, error) {
@@ -228,4 +150,18 @@ func (ds DriveService) CreatePermission(ctx context.Context, fileID string, perm
 		return nil, err
 	}
 	return googlePermission, nil
+}
+
+func (ds DriveServiceV2) About(ctx context.Context, fields googleapi.Field) (*driveV2.About, error) {
+	err := ds.checkRateLimits(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	da, err := ds.serviceV2.About.Get().Fields(fields).Do()
+	if err != nil {
+		ds.parseGoogleErrors(err)
+		return nil, err
+	}
+	return da, nil
 }

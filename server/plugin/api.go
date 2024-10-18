@@ -22,7 +22,6 @@ import (
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
-	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
 
@@ -384,47 +383,21 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	driveService, driveServiceError := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
-	if driveServiceError != nil {
-		p.API.LogError("Failed to create Google Drive client", "err", driveServiceError)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-		return
-	}
-	for i := 0; i < 11; i++ {
-		_, aboutErr := driveService.About(c.Ctx, "*")
-		if aboutErr != nil {
-			p.API.LogError("Failed to get Google Drive about", "err", aboutErr)
-			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-			return
-		}
-	}
-
-	if driveService != nil {
-		return
-	}
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(c.UserID)
-	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-		return
-	}
-
 	var fileCreationErr error
 	createdFileID := ""
 	fileType := r.URL.Query().Get("type")
 	switch fileType {
 	case "doc":
 		{
-			srv, dErr := docs.NewService(c.Ctx, option.WithTokenSource(conf.TokenSource(c.Ctx, authToken)))
+			srv, dErr := p.GoogleClient.NewDocsService(c.Ctx, c.UserID)
 			if dErr != nil {
 				p.API.LogError("Failed to create Google Docs client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			doc, dErr := srv.Documents.Create(&docs.Document{
+			doc, dErr := srv.Create(&docs.Document{
 				Title: fileCreationParams.Name,
-			}).Do()
+			})
 			if dErr != nil {
 				fileCreationErr = dErr
 				break
@@ -433,15 +406,15 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		}
 	case "slide":
 		{
-			srv, dErr := slides.NewService(c.Ctx, option.WithTokenSource(conf.TokenSource(c.Ctx, authToken)))
+			srv, dErr := p.GoogleClient.NewSlidesService(c.Ctx, c.UserID)
 			if dErr != nil {
 				p.API.LogError("Failed to create Google Slides client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			slide, dErr := srv.Presentations.Create(&slides.Presentation{
+			slide, dErr := srv.Create(&slides.Presentation{
 				Title: fileCreationParams.Name,
-			}).Do()
+			})
 			if dErr != nil {
 				fileCreationErr = dErr
 				break
@@ -450,17 +423,17 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		}
 	case "sheet":
 		{
-			srv, dErr := sheets.NewService(c.Ctx, option.WithTokenSource(conf.TokenSource(c.Ctx, authToken)))
+			srv, dErr := p.GoogleClient.NewSheetsService(c.Ctx, c.UserID)
 			if dErr != nil {
 				p.API.LogError("Failed to create Google Sheets client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			sheet, dErr := srv.Spreadsheets.Create(&sheets.Spreadsheet{
+			sheet, dErr := srv.Create(&sheets.Spreadsheet{
 				Properties: &sheets.SpreadsheetProperties{
 					Title: fileCreationParams.Name,
 				},
-			}).Do()
+			})
 			if dErr != nil {
 				fileCreationErr = dErr
 				break
@@ -510,14 +483,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	if watchChannelData.Token != token {
 		p.API.LogError("Invalid channel token", "userID", userID)
 		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(userID)
-	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err, "userID", userID)
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -599,7 +564,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+	activitySrv, err := p.GoogleClient.NewDriveActivityService(c.Ctx, userID)
 	if err != nil {
 		pageTokenErr = err
 		p.API.LogError("Failed to fetch Google Drive changes", "err", err, "userID", userID)
@@ -643,7 +608,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		var activities []*driveactivity.DriveActivity
 		for {
 			var activityRes *driveactivity.QueryDriveActivityResponse
-			activityRes, err = activitySrv.Activity.Query(driveActivityQuery).Do()
+			activityRes, err = activitySrv.Query(driveActivityQuery)
 			if err != nil {
 				p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", change.FileId, "userID", userID)
 				continue

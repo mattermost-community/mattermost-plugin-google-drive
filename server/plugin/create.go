@@ -12,9 +12,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	driveV2 "google.golang.org/api/drive/v2"
 	"google.golang.org/api/drive/v3"
-	"google.golang.org/api/option"
 )
 
 func (p *Plugin) sendFileCreatedMessage(ctx context.Context, channelID, fileID, userID, message string, shareInChannel bool) error {
@@ -208,20 +206,13 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 	})
 
 	ctx := context.Background()
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(args.UserId)
-	if err != nil {
-		p.API.LogError("Failed to get user token", "err", err)
-		return "Failed to open file creation dialog"
-	}
-
-	srvV2, err := driveV2.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+	serviceV2, err := p.GoogleClient.NewDriveV2Service(ctx, args.UserId)
 	if err != nil {
 		p.API.LogError("Failed to create drive client", "err", err)
 		return "Failed to open file creation dialog. Please contact your system administrator."
 	}
 
-	about, err := srvV2.About.Get().Fields("domainSharingPolicy").Do()
+	about, err := serviceV2.About(ctx, "domainSharingPolicy")
 	if err != nil {
 		p.API.LogError("Failed to get user information", "err", err)
 		return "Failed to open file creation dialog. Please contact your system administrator."
