@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/logger"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
@@ -384,9 +384,26 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ctx := context.Background()
+	driveService, driveServiceError := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
+	if driveServiceError != nil {
+		p.API.LogError("Failed to create Google Drive client", "err", driveServiceError)
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
+		return
+	}
+	for i := 0; i < 11; i++ {
+		_, aboutErr := driveService.About(c.Ctx, "*")
+		if aboutErr != nil {
+			p.API.LogError("Failed to get Google Drive about", "err", aboutErr)
+			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
+			return
+		}
+	}
+
+	if driveService != nil {
+		return
+	}
 	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(request.UserId)
+	authToken, err := p.getGoogleUserToken(c.UserID)
 	if err != nil {
 		p.API.LogError("Failed to get Google user token", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -399,7 +416,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	switch fileType {
 	case "doc":
 		{
-			srv, dErr := docs.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			srv, dErr := docs.NewService(c.Ctx, option.WithTokenSource(conf.TokenSource(c.Ctx, authToken)))
 			if dErr != nil {
 				p.API.LogError("Failed to create Google Docs client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -416,7 +433,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		}
 	case "slide":
 		{
-			srv, dErr := slides.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			srv, dErr := slides.NewService(c.Ctx, option.WithTokenSource(conf.TokenSource(c.Ctx, authToken)))
 			if dErr != nil {
 				p.API.LogError("Failed to create Google Slides client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -433,7 +450,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		}
 	case "sheet":
 		{
-			srv, dErr := sheets.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			srv, dErr := sheets.NewService(c.Ctx, option.WithTokenSource(conf.TokenSource(c.Ctx, authToken)))
 			if dErr != nil {
 				p.API.LogError("Failed to create Google Sheets client", "err", dErr)
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -458,13 +475,13 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	err = p.handleFilePermissions(request.UserId, createdFileID, fileCreationParams.FileAccess, request.ChannelId)
+	err = p.handleFilePermissions(c.Ctx, c.UserID, createdFileID, fileCreationParams.FileAccess, request.ChannelId)
 	if err != nil {
 		p.API.LogError("Failed to modify file permissions", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
-	err = p.sendFileCreatedMessage(request.ChannelId, createdFileID, request.UserId, fileCreationParams.Message, fileCreationParams.ShareInChannel, authToken)
+	err = p.sendFileCreatedMessage(c.Ctx, request.ChannelId, createdFileID, c.UserID, fileCreationParams.Message, fileCreationParams.ShareInChannel)
 	if err != nil {
 		p.API.LogError("Failed to send file creation post", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -476,6 +493,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	resourceState := r.Header.Get("X-Goog-Resource-State")
 	userID := r.URL.Query().Get("userID")
 
+	_, _ = p.Client.KV.Set("userID-"+userID, userID, pluginapi.SetExpiry(20))
 	if resourceState != "change" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -502,7 +520,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, userID)
 	if err != nil {
 		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -535,7 +553,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	pageToken := watchChannelData.PageToken
 	if pageToken == "" {
 		// This is to catch any edge cases where the pageToken is not set.
-		tokenResponse, tokenErr := srv.Changes.GetStartPageToken().Do()
+		tokenResponse, tokenErr := driveService.GetStartPageToken(c.Ctx)
 		if tokenErr != nil {
 			p.API.LogError("Failed to get start page token", "err", tokenErr, "userID", userID)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -547,7 +565,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	var pageTokenErr error
 	var changes []*drive.Change
 	for {
-		changeList, changeErr := srv.Changes.List(pageToken).Fields("*").Do()
+		changeList, changeErr := driveService.ChangesList(c.Ctx, pageToken)
 		if changeErr != nil {
 			p.API.LogError("Failed to fetch Google Drive changes", "err", changeErr, "userID", userID)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -653,7 +671,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
 					continue
 				}
-				p.handleCommentNotifications(srv, change.File, userID, activity)
+				p.handleCommentNotifications(c.Ctx, driveService, change.File, userID, activity)
 			}
 			if activity.PrimaryActionDetail.PermissionChange != nil {
 				if activity.Timestamp > lastActivityTime {
@@ -742,22 +760,15 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	commentID := r.URL.Query().Get("commentID")
 	fileID := r.URL.Query().Get("fileID")
 
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(request.UserId)
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
-	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-		return
-	}
-	reply, err := srv.Replies.Create(fileID, commentID, &drive.Reply{
+	reply, err := driveService.CreateReply(c.Ctx, fileID, commentID, &drive.Reply{
 		Content: request.Submission["message"].(string),
-	}).Fields("*").Do()
+	})
 	if err != nil {
 		p.API.LogError("Failed to create comment reply", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -803,25 +814,16 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(c.UserID)
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
-	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-		return
-	}
-
-	_, err = srv.Files.Create(&drive.File{
+	_, err = driveService.CreateFile(c.Ctx, &drive.File{
 		Name: fileInfo.Name,
-	}).Media(bytes.NewReader(fileReader)).Do()
+	}, fileReader)
 	if err != nil {
 		p.API.LogError("Failed to upload file", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -853,19 +855,9 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 		return
 	}
 
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-
-	authToken, err := p.getGoogleUserToken(c.UserID)
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-		return
-	}
-
-	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -886,9 +878,9 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 			return
 		}
 
-		_, err := srv.Files.Create(&drive.File{
+		_, err = driveService.CreateFile(c.Ctx, &drive.File{
 			Name: fileInfo.Name,
-		}).Media(bytes.NewReader(fileReader)).Do()
+		}, fileReader)
 		if err != nil {
 			p.API.LogError("Failed to upload file", "err", err)
 			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -918,13 +910,13 @@ func (p *Plugin) initializeAPI() {
 	oauthRouter.HandleFunc("/connect", p.checkAuth(p.attachContext(p.connectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
 	oauthRouter.HandleFunc("/complete", p.checkAuth(p.attachContext(p.completeConnectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
 
-	apiRouter.HandleFunc("/create", p.attachContext(p.handleFileCreation)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/create", p.checkAuth(p.attachContext(p.handleFileCreation), ResponseTypeJSON)).Methods(http.MethodPost)
 
 	apiRouter.HandleFunc("/webhook", p.attachContext(p.handleDriveWatchNotifications)).Methods(http.MethodPost)
 
-	apiRouter.HandleFunc("/reply_dialog", p.attachContext(p.openCommentReplyDialog)).Methods(http.MethodPost)
-	apiRouter.HandleFunc("/reply", p.attachContext(p.handleCommentReplyDialog)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/reply_dialog", p.checkAuth(p.attachContext(p.openCommentReplyDialog), ResponseTypeJSON)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/reply", p.checkAuth(p.attachContext(p.handleCommentReplyDialog), ResponseTypeJSON)).Methods(http.MethodPost)
 
-	apiRouter.HandleFunc("/upload_file", p.attachContext(p.handleFileUpload)).Methods(http.MethodPost)
-	apiRouter.HandleFunc("/upload_all", p.attachContext(p.handleAllFilesUpload)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/upload_file", p.checkAuth(p.attachContext(p.handleFileUpload), ResponseTypeJSON)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/upload_all", p.checkAuth(p.attachContext(p.handleAllFilesUpload), ResponseTypeJSON)).Methods(http.MethodPost)
 }

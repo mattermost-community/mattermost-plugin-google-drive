@@ -9,22 +9,18 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"golang.org/x/oauth2"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"google.golang.org/api/drive/v3"
-	"google.golang.org/api/option"
 )
 
-func (p *Plugin) sendFileCreatedMessage(channelID, fileID, userID, message string, shareInChannel bool, authToken *oauth2.Token) error {
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+func (p *Plugin) sendFileCreatedMessage(ctx context.Context, channelID, fileID, userID, message string, shareInChannel bool) error {
+	driveService, err := p.GoogleClient.NewDriveService(ctx, userID)
 	if err != nil {
-		p.API.LogError("Failed to create Google Drive client", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
 		return err
 	}
-	file, err := srv.Files.Get(fileID).Fields("webViewLink", "id", "owners", "permissions", "name", "iconLink", "thumbnailLink", "createdTime").Do()
+	file, err := driveService.GetFile(ctx, fileID)
 	if err != nil {
 		p.API.LogError("Failed to fetch  file", "err", err, "fileID", fileID)
 		return err
@@ -66,7 +62,7 @@ func (p *Plugin) sendFileCreatedMessage(channelID, fileID, userID, message strin
 	return nil
 }
 
-func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess string, channelID string) error {
+func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileID string, fileAccess string, channelID string) error {
 	permissions := make([]*drive.Permission, 0)
 	switch fileAccess {
 	case "all_view":
@@ -125,18 +121,14 @@ func (p *Plugin) handleFilePermissions(userID string, fileID string, fileAccess 
 		}
 	}
 
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-
-	authToken, _ := p.getGoogleUserToken(userID)
-	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+	driveService, err := p.GoogleClient.NewDriveService(ctx, userID)
 	if err != nil {
 		p.API.LogError("Failed to create Google Drive client", "err", err)
 		return err
 	}
 
 	for _, permission := range permissions {
-		_, err := srv.Permissions.Create(fileID, permission).Do()
+		_, err := driveService.CreatePermission(ctx, fileID, permission)
 		if err != nil {
 			p.API.LogError("Something went wrong while updating permissions for file", "err", err, "fileID", fileID)
 			return err

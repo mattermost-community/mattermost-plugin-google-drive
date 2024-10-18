@@ -18,4 +18,10 @@ type KVStore interface {
 	StoreGoogleUserToken(userID, encryptedToken string) error
 	GetGoogleUserToken(userID string) ([]byte, error)
 	DeleteGoogleUserToken(userID string) error
+
+	StoreUserRateLimitExceeded(userID string) error
+	GetUserRateLimitExceeded(userID string) (bool, error)
+
+	StoreProjectRateLimitExceeded() error
+	GetProjectRateLimitExceeded() (bool, error)
 }
