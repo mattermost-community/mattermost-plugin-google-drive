@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"fmt"
+	"strings"
 	"unicode"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -156,4 +158,83 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	}
 
 	return &model.CommandResponse{}, nil
+}
+
+func (p *Plugin) handleAbout(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
+	text, err := command.BuildInfo(model.Manifest{
+		Id:      Manifest.Id,
+		Version: Manifest.Version,
+		Name:    Manifest.Name,
+	})
+	if err != nil {
+		text = errors.Wrap(err, "failed to get build info").Error()
+	}
+	return text
+}
+
+func (p *Plugin) handleConnect(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
+	encryptedToken, err := p.KVStore.GetGoogleUserToken(args.UserId)
+	if err != nil {
+		return "Encountered an error connecting to Google Drive."
+	}
+	if len(encryptedToken) > 0 {
+		return "You have already connected your Google account. If you want to reconnect then disconnect the account first using `/google-drive disconnect`."
+	}
+	siteURL := p.Client.Configuration.GetConfig().ServiceSettings.SiteURL
+	if siteURL == nil {
+		return "Encountered an error connecting to Google Drive."
+	}
+
+	return fmt.Sprintf("[Click here to link your Google account.](%s/plugins/%s/oauth/connect)", *siteURL, Manifest.Id)
+}
+
+func (p *Plugin) handleDisconnect(c *plugin.Context, args *model.CommandArgs, _ []string) string {
+	encryptedToken, err := p.KVStore.GetGoogleUserToken(args.UserId)
+	if err != nil {
+		p.Client.Log.Error("Failed to disconnect google account", "error", err)
+		return "Encountered an error disconnecting Google account."
+	}
+
+	if len(encryptedToken) == 0 {
+		return "There is no Google account connected to your Mattermost account."
+	}
+
+	err = p.KVStore.DeleteGoogleUserToken(args.UserId)
+	if err != nil {
+		p.Client.Log.Error("Failed to disconnect Google account", "error", err)
+		return "Encountered an error disconnecting Google account."
+	}
+	return "Disconnected your Google account."
+}
+
+func (p *Plugin) handleSetup(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
+	userID := args.UserId
+	user, err := p.Client.User.Get(userID)
+	if err != nil {
+		p.Client.Log.Warn("Failed to check if user is System Admin", "error", err.Error())
+		return "Error checking user's permissions"
+	}
+	if !strings.Contains(user.Roles, "system_admin") {
+		return "Only System Admins are allowed to set up the plugin."
+	}
+
+	err = p.FlowManager.StartSetupWizard(userID)
+
+	if err != nil {
+		return err.Error()
+	}
+
+	return ""
+}
+
+const commandHelp = `* |/google-drive connect| - Connect to your Google account
+* |/google-drive disconnect| - Disconnect your Google account
+* |/google-drive create [doc/slide/sheet]| - Create and share Google documents, spreadsheets and presentations right from Mattermost.
+* |/google-drive notifications start| - Enable notification for Google files sharing and comments on files.
+* |/google-drive notifications stop| - Disable notification for Google files sharing and comments on files.
+* |/google-drive help| - Get help for available slash commands.
+* |/google-drive about| - Display build information about the plugin.`
+
+func (p *Plugin) handleHelp(_ *plugin.Context, _ *model.CommandArgs, _ []string) string {
+	return "###### Mattermost Google Drive Plugin - Slash Command Help\n" + strings.ReplaceAll(commandHelp, "|", "`")
 }
