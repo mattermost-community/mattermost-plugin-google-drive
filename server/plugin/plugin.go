@@ -15,10 +15,10 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry"
 	"github.com/pkg/errors"
 
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/config"
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/kvstore"
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/model"
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/utils"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 const (

@@ -14,8 +14,8 @@ import (
 	"google.golang.org/api/driveactivity/v2"
 	"google.golang.org/api/option"
 
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/model"
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/utils"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 func (p *Plugin) handleAddedComment(dSrv *drive.Service, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {

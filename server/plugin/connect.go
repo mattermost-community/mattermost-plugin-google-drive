@@ -8,7 +8,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"golang.org/x/oauth2"
 
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/utils"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 func (p *Plugin) getGoogleUserToken(userID string) (*oauth2.Token, error) {

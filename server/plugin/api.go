@@ -26,7 +26,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
 
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/utils"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 // ResponseType indicates type of response returned by api
@@ -483,6 +483,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
+		p.API.LogError("Unable to fund watch channel data", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -571,7 +572,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		err = p.KVStore.StoreWatchChannelData(userID, *watchChannelData)
 		if err != nil {
 			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err, "userID", userID)
-			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}()
