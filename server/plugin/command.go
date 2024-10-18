@@ -8,7 +8,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/command"
 	"github.com/pkg/errors"
 
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/config"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 )
 
 type CommandHandleFunc func(c *plugin.Context, args *model.CommandArgs, parameters []string) string

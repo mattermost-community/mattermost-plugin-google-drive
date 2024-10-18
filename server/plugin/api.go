@@ -26,7 +26,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
 
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/utils"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 // ResponseType indicates type of response returned by api
@@ -475,16 +475,16 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	err = p.handleFilePermissions(c.Ctx, c.UserID, createdFileID, fileCreationParams.FileAccess, request.ChannelId)
+	err = p.handleFilePermissions(c.Ctx, c.UserID, createdFileID, fileCreationParams.FileAccess, request.ChannelId, fileCreationParams.Name)
 	if err != nil {
 		p.API.LogError("Failed to modify file permissions", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "File was successfully created but file permissions failed to apply. Please contact your system administrator.", StatusCode: http.StatusInternalServerError})
 		return
 	}
 	err = p.sendFileCreatedMessage(c.Ctx, request.ChannelId, createdFileID, c.UserID, fileCreationParams.Message, fileCreationParams.ShareInChannel)
 	if err != nil {
 		p.API.LogError("Failed to send file creation post", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
+		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "File was successfully created but failed to share to the channel. Please contact your system administrator.", StatusCode: http.StatusInternalServerError})
 		return
 	}
 }
@@ -501,6 +501,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
+		p.API.LogError("Unable to fund watch channel data", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -589,7 +590,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		err = p.KVStore.StoreWatchChannelData(userID, *watchChannelData)
 		if err != nil {
 			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err, "userID", userID)
-			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}()

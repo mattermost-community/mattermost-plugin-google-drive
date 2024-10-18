@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
-	"github.com/darkLord19/mattermost-plugin-google-drive/server/plugin/config"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
@@ -184,7 +184,7 @@ func (fm *FlowManager) trackCompleteOauthWizard(userID string) {
 }
 
 func (fm *FlowManager) stepWelcome() flow.Step {
-	welcomePretext := ":wave: Welcome to your Google Drive integration! [Learn more](https://github.com/darkLord19/mattermost-plugin-google-drive#readme)"
+	welcomePretext := ":wave: Welcome to your Google Drive integration! [Learn more](https://github.com/mattermost-community/mattermost-plugin-google-drive#readme)"
 
 	welcomeText := `
 Just a few configuration steps to go!
@@ -338,7 +338,7 @@ func (fm *FlowManager) trackStartAnnouncementWizard(userID string) {
 func (fm *FlowManager) stepAnnouncementQuestion() flow.Step {
 	defaultMessage := "Hi team,\n" +
 		"\n" +
-		"We've set up the Mattermost Google Drive plugin to enable document creation, file uploads and file activity notifications in Mattermost. To get started, run the `/google-drive connect` slash command from any channel within Mattermost to connect your Google account. See the [documentation](https://github.com/darkLord19/mattermost-plugin-google-drive/) for details on using the Google Drive plugin."
+		"We've set up the Mattermost Google Drive plugin to enable document creation, file uploads and file activity notifications in Mattermost. To get started, run the `/google-drive connect` slash command from any channel within Mattermost to connect your Google account. See the [documentation](https://github.com/mattermost-community/mattermost-plugin-google-drive/) for details on using the Google Drive plugin."
 
 	return flow.NewStep(stepAnnouncementQuestion).
 		WithText("Want to let your team know?").
