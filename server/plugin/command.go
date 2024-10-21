@@ -7,13 +7,15 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/command"
 	"github.com/pkg/errors"
+
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 )
 
 type CommandHandleFunc func(c *plugin.Context, args *model.CommandArgs, parameters []string) string
 
 const commandDescription = "Available commands: connect, disconnect, create, notifications, help, about"
 
-func getAutocompleteData(config *Configuration) *model.AutocompleteData {
+func getAutocompleteData(config *config.Configuration) *model.AutocompleteData {
 	if !config.IsOAuthConfigured() {
 		drive := model.NewAutocompleteData("google-drive", "[command]", "Available commands: setup, about")
 
@@ -65,8 +67,8 @@ func getAutocompleteData(config *Configuration) *model.AutocompleteData {
 	return drive
 }
 
-func (p *Plugin) getCommand(config *Configuration) (*model.Command, error) {
-	iconData, err := command.GetIconData(&p.client.System, "assets/icon-bg.svg")
+func (p *Plugin) getCommand(config *config.Configuration) (*model.Command, error) {
+	iconData, err := command.GetIconData(&p.Client.System, "assets/icon-bg.svg")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get icon data")
 	}
@@ -132,16 +134,6 @@ func parseCommand(input string) (command, action string, parameters []string) {
 	return command, action, parameters
 }
 
-func (p *Plugin) postCommandResponse(args *model.CommandArgs, text string) {
-	post := &model.Post{
-		UserId:    p.BotUserID,
-		ChannelId: args.ChannelId,
-		RootId:    args.RootId,
-		Message:   text,
-	}
-	p.client.Post.SendEphemeralPost(args.UserId, post)
-}
-
 func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	cmd, action, parameters := parseCommand(args.Command)
 
@@ -152,7 +144,13 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	if f, ok := p.CommandHandlers[action]; ok {
 		message := f(c, args, parameters)
 		if message != "" {
-			p.postCommandResponse(args, message)
+			post := &model.Post{
+				UserId:    p.BotUserID,
+				ChannelId: args.ChannelId,
+				RootId:    args.RootId,
+				Message:   message,
+			}
+			p.Client.Post.SendEphemeralPost(args.UserId, post)
 		}
 		return &model.CommandResponse{}, nil
 	}

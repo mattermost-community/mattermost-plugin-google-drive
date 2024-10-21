@@ -7,13 +7,14 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"golang.org/x/oauth2"
+
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 func (p *Plugin) getGoogleUserToken(userID string) (*oauth2.Token, error) {
 	config := p.getConfiguration()
 
-	var encryptedToken []byte
-	err := p.client.KV.Get(getUserTokenKey(userID), &encryptedToken)
+	encryptedToken, err := p.KVStore.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -22,7 +23,7 @@ func (p *Plugin) getGoogleUserToken(userID string) (*oauth2.Token, error) {
 		return nil, nil
 	}
 
-	decryptedToken, err := decrypt([]byte(config.EncryptionKey), string(encryptedToken))
+	decryptedToken, err := utils.Decrypt([]byte(config.EncryptionKey), string(encryptedToken))
 	if err != nil {
 		return nil, err
 	}
@@ -34,8 +35,7 @@ func (p *Plugin) getGoogleUserToken(userID string) (*oauth2.Token, error) {
 }
 
 func (p *Plugin) isUserConnected(userID string) (bool, error) {
-	var encryptedToken []byte
-	err := p.client.KV.Get(getUserTokenKey(userID), &encryptedToken)
+	encryptedToken, err := p.KVStore.GetGoogleUserToken(userID)
 	if err != nil {
 		return false, err
 	}
@@ -49,10 +49,10 @@ func (p *Plugin) handleConnect(c *plugin.Context, args *model.CommandArgs, param
 	if connected, err := p.isUserConnected(args.UserId); connected && err == nil {
 		return "You have already connected your Google account. If you want to reconnect then disconnect the account first using `/google-drive disconnect`."
 	}
-	siteURL := p.client.Configuration.GetConfig().ServiceSettings.SiteURL
+	siteURL := p.Client.Configuration.GetConfig().ServiceSettings.SiteURL
 	if siteURL == nil {
 		return "Encountered an error connecting to Google Drive."
 	}
 
-	return fmt.Sprintf("[Click here to link your Google account.](%s/plugins/%s/oauth/connect)", *siteURL, manifest.Id)
+	return fmt.Sprintf("[Click here to link your Google account.](%s/plugins/%s/oauth/connect)", *siteURL, Manifest.Id)
 }

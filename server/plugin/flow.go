@@ -7,13 +7,14 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
+
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
 )
 
 type Tracker interface {
-	TrackEvent(event string, properties map[string]interface{})
 	TrackUserEvent(event, userID string, properties map[string]interface{})
 }
 
@@ -21,7 +22,7 @@ type FlowManager struct {
 	client           *pluginapi.Client
 	botUserID        string
 	router           *mux.Router
-	getConfiguration func() *Configuration
+	getConfiguration func() *config.Configuration
 
 	tracker Tracker
 
@@ -32,7 +33,7 @@ type FlowManager struct {
 
 func (p *Plugin) NewFlowManager() *FlowManager {
 	fm := &FlowManager{
-		client:           p.client,
+		client:           p.Client,
 		botUserID:        p.BotUserID,
 		router:           p.router,
 		getConfiguration: p.getConfiguration,
@@ -72,7 +73,7 @@ func (fm *FlowManager) newFlow(name flow.Name) *flow.Flow {
 	flow, _ := flow.NewFlow(
 		name,
 		fm.client,
-		manifest.Id,
+		Manifest.Id,
 		fm.botUserID,
 	)
 
@@ -106,7 +107,7 @@ func cancelButton() flow.Button {
 func (fm *FlowManager) stepCancel(command string) flow.Step {
 	return flow.NewStep(stepCancel).
 		Terminal().
-		WithText(fmt.Sprintf("Google Drive integration setup has stopped. Restart setup later by running `/google-drive %s`. Learn more about the plugin [here](%s).", command, manifest.HomepageURL)).
+		WithText(fmt.Sprintf("Google Drive integration setup has stopped. Restart setup later by running `/google-drive %s`. Learn more about the plugin [here](%s).", command, Manifest.HomepageURL)).
 		WithColor(flow.ColorDanger)
 }
 
@@ -217,7 +218,7 @@ You must first register the Mattermost Google Drive Plugin as an authorized OAut
 			"8. Then, a select input will ask the type of Application type that will be used, select **Web application**, then, fill the form, and on **Authorized redirect URIs** add the following URI.\n"+
 			"	- Redirect URI: `%s/plugins/%s/oauth/complete`\n"+
 			"9. After the Client has been configured, on the main page of **Credentials**, on the submenu **OAuth 2.0 Client IDs** will be displayed the new Client and the info can be accessible whenever you need it.",
-		*fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id,
+		*fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, Manifest.Id,
 	)
 
 	return flow.NewStep(stepOAuthInfo).
@@ -306,7 +307,7 @@ func (fm *FlowManager) submitOAuthConfig(f *flow.Flow, submitted map[string]inte
 
 func (fm *FlowManager) stepOAuthConnect() flow.Step {
 	connectPretext := "##### :white_check_mark: Connect your Google account"
-	connectURL := fmt.Sprintf("%s/plugins/%s/oauth/connect", *fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, manifest.Id)
+	connectURL := fmt.Sprintf("%s/plugins/%s/oauth/connect", *fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, Manifest.Id)
 	connectText := fmt.Sprintf("Go [here](%s) to connect your account.", connectURL)
 	return flow.NewStep(stepOAuthConnect).
 		WithText(connectText).
