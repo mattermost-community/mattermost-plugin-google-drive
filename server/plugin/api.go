@@ -395,7 +395,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			doc, dErr := srv.Create(&docs.Document{
+			doc, dErr := srv.Create(c.Ctx, &docs.Document{
 				Title: fileCreationParams.Name,
 			})
 			if dErr != nil {
@@ -412,7 +412,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			slide, dErr := srv.Create(&slides.Presentation{
+			slide, dErr := srv.Create(c.Ctx, &slides.Presentation{
 				Title: fileCreationParams.Name,
 			})
 			if dErr != nil {
@@ -429,7 +429,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			sheet, dErr := srv.Create(&sheets.Spreadsheet{
+			sheet, dErr := srv.Create(c.Ctx, &sheets.Spreadsheet{
 				Properties: &sheets.SpreadsheetProperties{
 					Title: fileCreationParams.Name,
 				},
@@ -582,7 +582,11 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		viewedByMeTime, _ := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
 
 		// Check if the user has already opened the file after the last change.
-		if lastChangeTime.Sub(modifiedTime) > lastChangeTime.Sub(viewedByMeTime) {
+		if lastChangeTime.Sub(modifiedTime) >= lastChangeTime.Sub(viewedByMeTime) {
+			err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ViewedByMeTime)
+			if err != nil {
+				p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
+			}
 			continue
 		}
 
@@ -594,6 +598,10 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		if err != nil {
 			p.API.LogDebug("Failed to fetch last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
 			continue
+		}
+
+		if change.File.ViewedByMeTime > lastActivityTime {
+			lastActivityTime = change.File.ViewedByMeTime
 		}
 
 		// If we have a last activity timestamp for this file we can use it to filter the activities.
@@ -608,7 +616,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		var activities []*driveactivity.DriveActivity
 		for {
 			var activityRes *driveactivity.QueryDriveActivityResponse
-			activityRes, err = activitySrv.Query(driveActivityQuery)
+			activityRes, err = activitySrv.Query(c.Ctx, driveActivityQuery)
 			if err != nil {
 				p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", change.FileId, "userID", userID)
 				continue
@@ -629,19 +637,16 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		// Newest activity is at the end of the list so iterate through the list in reverse.
 		for i := len(activities) - 1; i >= 0; i-- {
 			activity := activities[i]
+			if activity.Timestamp > lastActivityTime {
+				newLastActivityTime = activity.Timestamp
+			}
 			if activity.PrimaryActionDetail.Comment != nil {
-				if activity.Timestamp > lastActivityTime {
-					newLastActivityTime = activity.Timestamp
-				}
 				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
 					continue
 				}
 				p.handleCommentNotifications(c.Ctx, driveService, change.File, userID, activity)
 			}
 			if activity.PrimaryActionDetail.PermissionChange != nil {
-				if activity.Timestamp > lastActivityTime {
-					newLastActivityTime = activity.Timestamp
-				}
 				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
 					continue
 				}

@@ -1,6 +1,8 @@
 package google
 
 import (
+	"context"
+
 	"google.golang.org/api/driveactivity/v2"
 )
 
@@ -9,10 +11,10 @@ type DriveActivityService struct {
 	googleServiceBase
 }
 
-func (ds *DriveActivityService) Query(request *driveactivity.QueryDriveActivityRequest) (*driveactivity.QueryDriveActivityResponse, error) {
+func (ds *DriveActivityService) Query(ctx context.Context, request *driveactivity.QueryDriveActivityRequest) (*driveactivity.QueryDriveActivityResponse, error) {
 	p, err := ds.service.Activity.Query(request).Do()
 	if err != nil {
-		ds.parseGoogleErrors(err)
+		ds.parseGoogleErrors(ctx, err)
 		return nil, err
 	}
 	return p, nil

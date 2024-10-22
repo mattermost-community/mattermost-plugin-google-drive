@@ -1,6 +1,8 @@
 package google
 
 import (
+	"context"
+
 	"google.golang.org/api/sheets/v4"
 )
 
@@ -9,10 +11,10 @@ type SheetsService struct {
 	googleServiceBase
 }
 
-func (ds *SheetsService) Create(spreadsheet *sheets.Spreadsheet) (*sheets.Spreadsheet, error) {
+func (ds *SheetsService) Create(ctx context.Context, spreadsheet *sheets.Spreadsheet) (*sheets.Spreadsheet, error) {
 	p, err := ds.service.Spreadsheets.Create(spreadsheet).Do()
 	if err != nil {
-		ds.parseGoogleErrors(err)
+		ds.parseGoogleErrors(ctx, err)
 		return nil, err
 	}
 	return p, nil

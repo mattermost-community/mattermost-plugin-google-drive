@@ -283,6 +283,9 @@ func (p *Plugin) OnConfigurationChange() error {
 		p.tracker.ReloadConfig(telemetry.NewTrackerConfig(p.Client.Configuration.GetConfig()))
 	}
 
+	if p.GoogleClient != nil {
+		p.GoogleClient.ReloadRateLimits(configuration.QueriesPerMinute, configuration.BurstSize)
+	}
 	return nil
 }
 

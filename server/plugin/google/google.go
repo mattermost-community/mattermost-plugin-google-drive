@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"time"
 
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"golang.org/x/oauth2"
@@ -49,12 +48,15 @@ const (
 )
 
 func NewGoogleClient(oauthConfig *oauth2.Config, config *config.Configuration, kvstore kvstore.KVStore, papi plugin.API) *Client {
+	maximumQueriesPerSecond := config.QueriesPerMinute / 60
+	burstSize := config.BurstSize
+
 	return &Client{
 		oauthConfig:  oauthConfig,
 		config:       config,
 		kvstore:      kvstore,
 		papi:         papi,
-		driveLimiter: rate.NewLimiter(rate.Every(time.Second), 10),
+		driveLimiter: rate.NewLimiter(rate.Limit(maximumQueriesPerSecond), burstSize),
 	}
 }
 
@@ -63,11 +65,12 @@ func (g *Client) NewDriveService(ctx context.Context, userID string) (*DriveServ
 	if err != nil {
 		return nil, err
 	}
-	if !g.driveLimiter.Allow() {
-		err = g.driveLimiter.WaitN(ctx, 1)
-		if err != nil {
-			return nil, err
-		}
+
+	g.papi.LogDebug("Checking rate limits", "userID", userID, "Limit", g.driveLimiter.Limit(), "Burst", g.driveLimiter.Burst(), "userID", userID)
+
+	err = g.driveLimiter.WaitN(ctx, 1)
+	if err != nil {
+		return nil, err
 	}
 
 	srv, err := drive.NewService(ctx, option.WithTokenSource(g.oauthConfig.TokenSource(ctx, authToken)))
@@ -229,7 +232,7 @@ func (g *Client) getGoogleUserToken(userID string) (*oauth2.Token, error) {
 	return &oauthToken, err
 }
 
-func (ds googleServiceBase) parseGoogleErrors(err error) {
+func (ds googleServiceBase) parseGoogleErrors(ctx context.Context, err error) {
 	if googleErr, ok := err.(*googleapi.Error); ok {
 		reason := ""
 		if len(googleErr.Errors) > 0 {
@@ -265,7 +268,7 @@ func (ds googleServiceBase) parseGoogleErrors(err error) {
 							ds.papi.LogError("Failed to store user rate limit exceeded", "userID", ds.userID, "err", err)
 							return
 						}
-					} else if errDetail.Reason == "RATE_LIMIT_EXCEEDED" && errDetail.Metadata.QuotaLimit == "defaultPerMinutePerProject" {
+					} else {
 						err = ds.kvstore.StoreProjectRateLimitExceeded(ds.serviceType)
 						if err != nil {
 							ds.papi.LogError("Failed to store rate limit exceeded", "err", err)
@@ -304,4 +307,9 @@ func (ds googleServiceBase) checkRateLimits(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (g *Client) ReloadRateLimits(newQueriesPerMinute int, newBurstSize int) {
+	g.driveLimiter.SetLimit(rate.Limit(newQueriesPerMinute / 60))
+	g.driveLimiter.SetBurst(newBurstSize)
 }

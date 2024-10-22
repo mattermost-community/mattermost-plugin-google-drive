@@ -24,6 +24,8 @@ type Configuration struct {
 	GoogleOAuthClientID     string `json:"googleoauthclientid"`
 	GoogleOAuthClientSecret string `json:"googleoauthclientsecret"`
 	EncryptionKey           string `json:"encryptionkey"`
+	QueriesPerMinute        int    `json:"queriesperminute"`
+	BurstSize               int    `json:"burstsize"`
 }
 
 func (c *Configuration) ToMap() (map[string]interface{}, error) {
@@ -87,6 +89,14 @@ func (c *Configuration) IsValid() error {
 
 	if c.EncryptionKey == "" {
 		return errors.New("must have an encryption key")
+	}
+
+	if c.QueriesPerMinute <= 0 {
+		return errors.New("queries per minute must be greater than 0")
+	}
+
+	if c.BurstSize <= 0 {
+		return errors.New("burst size must be greater than 0")
 	}
 
 	return nil
