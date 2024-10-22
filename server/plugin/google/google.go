@@ -66,8 +66,6 @@ func (g *Client) NewDriveService(ctx context.Context, userID string) (*DriveServ
 		return nil, err
 	}
 
-	g.papi.LogDebug("Checking rate limits", "userID", userID, "Limit", g.driveLimiter.Limit(), "Burst", g.driveLimiter.Burst(), "userID", userID)
-
 	err = g.driveLimiter.WaitN(ctx, 1)
 	if err != nil {
 		return nil, err
