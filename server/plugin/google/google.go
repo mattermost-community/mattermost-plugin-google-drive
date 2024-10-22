@@ -66,6 +66,11 @@ func (g *Client) NewDriveService(ctx context.Context, userID string) (*DriveServ
 		return nil, err
 	}
 
+	err = checkKVStoreLimitExceeded(g.kvstore, driveServiceType, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	err = g.driveLimiter.WaitN(ctx, 1)
 	if err != nil {
 		return nil, err
@@ -93,11 +98,15 @@ func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (*DriveSe
 	if err != nil {
 		return nil, err
 	}
-	if !g.driveLimiter.Allow() {
-		err = g.driveLimiter.WaitN(ctx, 1)
-		if err != nil {
-			return nil, err
-		}
+
+	err = checkKVStoreLimitExceeded(g.kvstore, driveServiceType, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = g.driveLimiter.WaitN(ctx, 1)
+	if err != nil {
+		return nil, err
 	}
 
 	srv, err := driveV2.NewService(ctx, option.WithTokenSource(g.oauthConfig.TokenSource(ctx, authToken)))
@@ -119,6 +128,11 @@ func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (*DriveSe
 
 func (g *Client) NewDocsService(ctx context.Context, userID string) (*DocsService, error) {
 	authToken, err := g.getGoogleUserToken(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = checkKVStoreLimitExceeded(g.kvstore, docsServiceType, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +160,11 @@ func (g *Client) NewSlidesService(ctx context.Context, userID string) (*SlidesSe
 		return nil, err
 	}
 
+	err = checkKVStoreLimitExceeded(g.kvstore, slidesServiceType, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	srv, err := slides.NewService(ctx, option.WithTokenSource(g.oauthConfig.TokenSource(ctx, authToken)))
 	if err != nil {
 		return nil, err
@@ -169,6 +188,11 @@ func (g *Client) NewSheetsService(ctx context.Context, userID string) (*SheetsSe
 		return nil, err
 	}
 
+	err = checkKVStoreLimitExceeded(g.kvstore, sheetsServiceType, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	srv, err := sheets.NewService(ctx, option.WithTokenSource(g.oauthConfig.TokenSource(ctx, authToken)))
 	if err != nil {
 		return nil, err
@@ -188,6 +212,11 @@ func (g *Client) NewSheetsService(ctx context.Context, userID string) (*SheetsSe
 
 func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (*DriveActivityService, error) {
 	authToken, err := g.getGoogleUserToken(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = checkKVStoreLimitExceeded(g.kvstore, driveActivityServiceType, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -279,29 +308,36 @@ func (ds googleServiceBase) parseGoogleErrors(ctx context.Context, err error) {
 	}
 }
 
-func (ds googleServiceBase) checkRateLimits(ctx context.Context) error {
-	if ds.limiter == nil {
-		return nil
-	}
-	userIsRateLimited, err := ds.kvstore.GetUserRateLimitExceeded(ds.serviceType, ds.userID)
+func checkKVStoreLimitExceeded(kv kvstore.KVStore, serviceType string, userID string) error {
+	userIsRateLimited, err := kv.GetUserRateLimitExceeded(serviceType, userID)
 	if err != nil {
 		return err
 	}
 	if userIsRateLimited {
-		return errors.New("user rate limit exceeded")
+		return errors.New("user rate limit exceeded for Google service: " + serviceType)
 	}
 
-	projectIsRateLimited, err := ds.kvstore.GetProjectRateLimitExceeded(ds.serviceType)
+	projectIsRateLimited, err := kv.GetProjectRateLimitExceeded(serviceType)
 	if err != nil {
 		return err
 	}
 	if projectIsRateLimited {
-		return errors.New("project rate limit exceeded")
+		return errors.New("project rate limit exceeded for Google service: " + serviceType)
 	}
 
-	err = ds.limiter.WaitN(ctx, 1)
+	return nil
+}
+
+func (ds googleServiceBase) checkRateLimits(ctx context.Context) error {
+	err := checkKVStoreLimitExceeded(ds.kvstore, ds.serviceType, ds.userID)
 	if err != nil {
 		return err
+	}
+	if ds.limiter != nil {
+		err = ds.limiter.WaitN(ctx, 1)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

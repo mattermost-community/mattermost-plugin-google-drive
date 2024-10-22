@@ -12,6 +12,10 @@ type DocsService struct {
 }
 
 func (ds *DocsService) Create(ctx context.Context, doc *docs.Document) (*docs.Document, error) {
+	err := ds.checkRateLimits(ctx)
+	if err != nil {
+		return nil, err
+	}
 	d, err := ds.service.Documents.Create(doc).Do()
 	if err != nil {
 		ds.parseGoogleErrors(ctx, err)

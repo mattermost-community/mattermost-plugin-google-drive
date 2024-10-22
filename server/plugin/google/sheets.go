@@ -12,6 +12,10 @@ type SheetsService struct {
 }
 
 func (ds *SheetsService) Create(ctx context.Context, spreadsheet *sheets.Spreadsheet) (*sheets.Spreadsheet, error) {
+	err := ds.checkRateLimits(ctx)
+	if err != nil {
+		return nil, err
+	}
 	p, err := ds.service.Spreadsheets.Create(spreadsheet).Do()
 	if err != nil {
 		ds.parseGoogleErrors(ctx, err)
