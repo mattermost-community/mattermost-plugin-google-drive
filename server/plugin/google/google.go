@@ -259,8 +259,8 @@ func (g *Client) getGoogleUserToken(userID string) (*oauth2.Token, error) {
 	return &oauthToken, err
 }
 
-func (ds googleServiceBase) parseGoogleErrors(ctx context.Context, err error) {
-	if googleErr, ok := err.(*googleapi.Error); ok {
+func (ds googleServiceBase) parseGoogleErrors(ctx context.Context, apiErr error) error {
+	if googleErr, ok := apiErr.(*googleapi.Error); ok {
 		reason := ""
 		if len(googleErr.Errors) > 0 {
 			for _, error := range googleErr.Errors {
@@ -271,10 +271,9 @@ func (ds googleServiceBase) parseGoogleErrors(ctx context.Context, err error) {
 			}
 		}
 		if reason == "userRateLimitExceeded" {
-			err = ds.kvstore.StoreUserRateLimitExceeded(ds.serviceType, ds.userID)
+			err := ds.kvstore.StoreUserRateLimitExceeded(ds.serviceType, ds.userID)
 			if err != nil {
-				ds.papi.LogError("Failed to store user rate limit exceeded", "userID", ds.userID, "err", err)
-				return
+				return errors.Join(apiErr, err)
 			}
 		}
 		if reason == "rateLimitExceeded" && len(googleErr.Details) > 0 {
@@ -283,29 +282,29 @@ func (ds googleServiceBase) parseGoogleErrors(ctx context.Context, err error) {
 				var errDetail *model.ErrorDetail
 				jsonErr := json.Unmarshal(byteData, &errDetail)
 				if jsonErr != nil {
-					ds.papi.LogError("Failed to parse error details", "err", jsonErr)
+					ds.papi.LogWarn("Failed to parse error details", "err", jsonErr)
 					continue
 				}
 
 				if errDetail != nil {
 					// Even if the original "reason" is rateLimitExceeded, we need to check the QuotaLimit field in the metadata because it might only apply to this specific user.
 					if errDetail.Reason == "RATE_LIMIT_EXCEEDED" && errDetail.Metadata.QuotaLimit == "defaultPerMinutePerUser" {
-						err = ds.kvstore.StoreUserRateLimitExceeded(ds.serviceType, ds.userID)
+						err := ds.kvstore.StoreUserRateLimitExceeded(ds.serviceType, ds.userID)
 						if err != nil {
-							ds.papi.LogError("Failed to store user rate limit exceeded", "userID", ds.userID, "err", err)
-							return
+							return errors.Join(apiErr, err)
 						}
 					} else {
-						err = ds.kvstore.StoreProjectRateLimitExceeded(ds.serviceType)
+						err := ds.kvstore.StoreProjectRateLimitExceeded(ds.serviceType)
 						if err != nil {
-							ds.papi.LogError("Failed to store rate limit exceeded", "err", err)
-							return
+							return errors.Join(apiErr, err)
 						}
 					}
 				}
 			}
 		}
 	}
+
+	return apiErr
 }
 
 func checkKVStoreLimitExceeded(kv kvstore.KVStore, serviceType string, userID string) error {

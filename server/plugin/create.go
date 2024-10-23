@@ -2,11 +2,12 @@ package plugin
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
@@ -18,13 +19,11 @@ import (
 func (p *Plugin) sendFileCreatedMessage(ctx context.Context, channelID, fileID, userID, message string, shareInChannel bool) error {
 	driveService, err := p.GoogleClient.NewDriveService(ctx, userID)
 	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
-		return err
+		return errors.Wrap(err, "failed to create Google Drive service")
 	}
 	file, err := driveService.GetFile(ctx, fileID)
 	if err != nil {
-		p.API.LogError("Failed to fetch  file", "err", err, "fileID", fileID)
-		return err
+		return errors.Wrap(err, "failed to fetch file")
 	}
 
 	createdTime, _ := time.Parse(time.RFC3339, file.CreatedTime)
@@ -128,8 +127,7 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 
 	driveService, err := p.GoogleClient.NewDriveService(ctx, userID)
 	if err != nil {
-		p.API.LogError("Failed to create Google Drive client", "err", err)
-		return err
+		return errors.Wrap(err, "failed to create Google Drive service")
 	}
 
 	usersWithoutAccesss := []string{}
@@ -149,7 +147,6 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 			if strings.Contains(err.Error(), "shareOutNotPermitted") {
 				continue
 			}
-			p.API.LogError("Something went wrong while updating permissions for file", "err", err, "fileID", fileID)
 			permissionError = err
 		}
 	}

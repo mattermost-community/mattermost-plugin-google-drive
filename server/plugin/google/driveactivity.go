@@ -18,7 +18,7 @@ func (ds *DriveActivityService) Query(ctx context.Context, request *driveactivit
 	}
 	p, err := ds.service.Activity.Query(request).Do()
 	if err != nil {
-		ds.parseGoogleErrors(ctx, err)
+		err = ds.parseGoogleErrors(ctx, err)
 		return nil, err
 	}
 	return p, nil

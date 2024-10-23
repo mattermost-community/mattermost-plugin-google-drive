@@ -47,10 +47,6 @@ type Context struct {
 	Log    logger.Logger
 }
 
-type UserContext struct {
-	Context
-}
-
 type FileCreationRequest struct {
 	Name           string `json:"name"`
 	FileAccess     string `json:"file_access"`
@@ -73,9 +69,6 @@ type DialogErrorResponse struct {
 	Error      string `json:"error"`
 	StatusCode int    `json:"status_code"`
 }
-
-// HTTPHandlerFuncWithUserContext is http.HandleFunc but with a UserContext attached
-type HTTPHandlerFuncWithUserContext func(c *UserContext, w http.ResponseWriter, r *http.Request)
 
 // HTTPHandlerFuncWithContext is http.HandleFunc but with a Context attached
 type HTTPHandlerFuncWithContext func(c *Context, w http.ResponseWriter, r *http.Request)
@@ -378,7 +371,7 @@ func getRawRequestAndFileCreationParams(r *http.Request) (*FileCreationRequest, 
 func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.Request) {
 	fileCreationParams, request, err := getRawRequestAndFileCreationParams(r)
 	if err != nil {
-		p.API.LogError("Failed to get fileCreationParams", "err", err)
+		c.Log.WithError(err).Errorf("Failed to get fileCreationParams")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
@@ -391,7 +384,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		{
 			srv, dErr := p.GoogleClient.NewDocsService(c.Ctx, c.UserID)
 			if dErr != nil {
-				p.API.LogError("Failed to create Google Docs client", "err", dErr)
+				c.Log.WithError(dErr).Errorf("Failed to create Google Docs client")
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
@@ -408,7 +401,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		{
 			srv, dErr := p.GoogleClient.NewSlidesService(c.Ctx, c.UserID)
 			if dErr != nil {
-				p.API.LogError("Failed to create Google Slides client", "err", dErr)
+				c.Log.WithError(dErr).Errorf("Failed to create Google Slides client")
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
@@ -425,7 +418,7 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		{
 			srv, dErr := p.GoogleClient.NewSheetsService(c.Ctx, c.UserID)
 			if dErr != nil {
-				p.API.LogError("Failed to create Google Sheets client", "err", dErr)
+				c.Log.WithError(dErr).Errorf("Failed to create Google Sheets client")
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
@@ -443,20 +436,20 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	}
 
 	if fileCreationErr != nil {
-		p.API.LogError("Failed to create Google Drive file", "err", fileCreationErr)
+		c.Log.WithError(fileCreationErr).Errorf("Failed to create Google Drive file")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
 	err = p.handleFilePermissions(c.Ctx, c.UserID, createdFileID, fileCreationParams.FileAccess, request.ChannelId, fileCreationParams.Name)
 	if err != nil {
-		p.API.LogError("Failed to modify file permissions", "err", err)
+		c.Log.WithError(err).Errorf("Failed to modify file permissions")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "File was successfully created but file permissions failed to apply. Please contact your system administrator.", StatusCode: http.StatusInternalServerError})
 		return
 	}
 	err = p.sendFileCreatedMessage(c.Ctx, request.ChannelId, createdFileID, c.UserID, fileCreationParams.Message, fileCreationParams.ShareInChannel)
 	if err != nil {
-		p.API.LogError("Failed to send file creation post", "err", err)
+		c.Log.WithError(err).Errorf("Failed to send file creation post")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "File was successfully created but failed to share to the channel. Please contact your system administrator.", StatusCode: http.StatusInternalServerError})
 		return
 	}

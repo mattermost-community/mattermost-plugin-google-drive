@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/pkg/errors"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
 
@@ -18,17 +19,24 @@ import (
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
-func (p *Plugin) handleAddedComment(ctx context.Context, dSrv *google.DriveService, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
+func getCommentUsingDiscussionID(ctx context.Context, dSrv *google.DriveService, fileID string, activity *driveactivity.DriveActivity) (*drive.Comment, error) {
 	if len(activity.Targets) == 0 ||
 		activity.Targets[0].FileComment == nil ||
-		activity.Targets[0].FileComment.LegacyCommentId == "" {
-		p.API.LogWarn("There is no legacyCommentId present in the activity")
-		return
+		activity.Targets[0].FileComment.LegacyDiscussionId == "" {
+		return nil, errors.New("no legacyDiscussionId present in the activity")
 	}
 	commentID := activity.Targets[0].FileComment.LegacyDiscussionId
 	comment, err := dSrv.GetComments(ctx, fileID, commentID)
 	if err != nil {
-		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "commentID", commentID)
+		return nil, err
+	}
+	return comment, nil
+}
+
+func (p *Plugin) handleAddedComment(ctx context.Context, dSrv *google.DriveService, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
+	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
+	if err != nil {
+		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
 		return
 	}
 	quotedValue := ""
@@ -46,7 +54,7 @@ func (p *Plugin) handleAddedComment(ctx context.Context, dSrv *google.DriveServi
 						"integration": map[string]any{
 							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id),
 							"context": map[string]any{
-								"commentID": commentID,
+								"commentID": comment.Id,
 								"fileID":    fileID,
 							},
 						},
@@ -65,16 +73,9 @@ func (p *Plugin) handleDeletedComment(userID string, activity *driveactivity.Dri
 }
 
 func (p *Plugin) handleReplyAdded(ctx context.Context, dSrv *google.DriveService, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
-	if len(activity.Targets) == 0 ||
-		activity.Targets[0].FileComment == nil ||
-		activity.Targets[0].FileComment.LegacyDiscussionId == "" {
-		p.API.LogWarn("There is no legacyDiscussionId present in the activity")
-		return
-	}
-	commentID := activity.Targets[0].FileComment.LegacyDiscussionId
-	comment, err := dSrv.GetComments(ctx, fileID, commentID)
+	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
 	if err != nil {
-		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "commentID", commentID)
+		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
@@ -101,7 +102,7 @@ func (p *Plugin) handleReplyAdded(ctx context.Context, dSrv *google.DriveService
 						"integration": map[string]any{
 							"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id),
 							"context": map[string]any{
-								"commentID": commentID,
+								"commentID": comment.Id,
 								"fileID":    fileID,
 							},
 						},
@@ -123,13 +124,13 @@ func (p *Plugin) handleResolvedComment(ctx context.Context, dSrv *google.DriveSe
 	if len(activity.Targets) == 0 ||
 		activity.Targets[0].FileComment == nil ||
 		activity.Targets[0].FileComment.LegacyCommentId == "" {
-		p.API.LogWarn("There is no legacyCommentId present in the activity")
+		p.API.LogWarn("There is no legacyCommentId present in the activity", "userID", userID)
 		return
 	}
 	commentID := activity.Targets[0].FileComment.LegacyCommentId
 	comment, err := dSrv.GetComments(ctx, fileID, commentID)
 	if err != nil {
-		p.API.LogError("Failed to get comment by legacyCommentId", "err", err, "commentID", commentID)
+		p.API.LogError("Failed to get comment by legacyCommentId", "err", err, "commentID", commentID, "userID", userID)
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
@@ -138,16 +139,9 @@ func (p *Plugin) handleResolvedComment(ctx context.Context, dSrv *google.DriveSe
 }
 
 func (p *Plugin) handleReopenedComment(ctx context.Context, dSrv *google.DriveService, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
-	if len(activity.Targets) == 0 ||
-		activity.Targets[0].FileComment == nil ||
-		activity.Targets[0].FileComment.LegacyDiscussionId == "" {
-		p.API.LogWarn("There is no legacyDiscussionId present in the activity")
-		return
-	}
-	commentID := activity.Targets[0].FileComment.LegacyDiscussionId
-	comment, err := dSrv.GetComments(ctx, fileID, commentID)
+	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
 	if err != nil {
-		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "commentID", commentID)
+		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion

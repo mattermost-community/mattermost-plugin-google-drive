@@ -18,7 +18,7 @@ func (ds *SlidesService) Create(ctx context.Context, presentation *slides.Presen
 	}
 	p, err := ds.service.Presentations.Create(presentation).Do()
 	if err != nil {
-		ds.parseGoogleErrors(ctx, err)
+		err = ds.parseGoogleErrors(ctx, err)
 		return nil, err
 	}
 	return p, nil

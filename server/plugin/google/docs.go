@@ -18,7 +18,7 @@ func (ds *DocsService) Create(ctx context.Context, doc *docs.Document) (*docs.Do
 	}
 	d, err := ds.service.Documents.Create(doc).Do()
 	if err != nil {
-		ds.parseGoogleErrors(ctx, err)
+		err = ds.parseGoogleErrors(ctx, err)
 		return nil, err
 	}
 	return d, nil
