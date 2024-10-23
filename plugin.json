@@ -48,6 +48,24 @@
             "placeholder": "",
             "default": null,
             "hosting": ""
+          },
+          {
+            "key": "QueriesPerMinute",
+            "display_name": "Maximum queries per minute:",
+            "type": "number",
+            "help_text": "The number of requests per minute allowed by your Google Drive API, you can find this number under the Quotas & System limits of your Google Drive API. If you are running a high availability setup you will need to divide your quota by the number of nodes in your Mattermost cluster. So if you have 3 Mattermost nodes running and your quoata is 12000 requests per minute, you will need to set this value to 4000.",
+            "placeholder": "",
+            "default": "12000",
+            "hosting": ""
+          },
+          {
+            "key": "BurstSize",
+            "display_name": "Maximum burst size:",
+            "type": "number",
+            "help_text": "The maximum number of requests allowed beyond the **per second** query limit. This is useful for handling short bursts of requests.",
+            "placeholder": "",
+            "default": "300",
+            "hosting": ""
           }
         ]
       }

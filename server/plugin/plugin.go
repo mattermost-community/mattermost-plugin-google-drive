@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
@@ -50,6 +51,8 @@ type Plugin struct {
 	oauthBroker *OAuthBroker
 
 	channelRefreshJob *cluster.Job
+
+	GoogleClient *google.Client
 }
 
 func (p *Plugin) ensurePluginAPIClient() {
@@ -168,6 +171,8 @@ func (p *Plugin) OnActivate() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to create a scheduled recurring job to refresh watch channels")
 	}
+
+	p.GoogleClient = google.NewGoogleClient(p.getOAuthConfig(), p.getConfiguration(), p.KVStore, p.API)
 	return nil
 }
 
@@ -278,6 +283,9 @@ func (p *Plugin) OnConfigurationChange() error {
 		p.tracker.ReloadConfig(telemetry.NewTrackerConfig(p.Client.Configuration.GetConfig()))
 	}
 
+	if p.GoogleClient != nil {
+		p.GoogleClient.ReloadRateLimits(configuration.QueriesPerMinute, configuration.BurstSize)
+	}
 	return nil
 }
 
