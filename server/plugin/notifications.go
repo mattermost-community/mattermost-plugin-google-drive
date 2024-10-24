@@ -202,6 +202,17 @@ func (p *Plugin) handleFileSharedNotification(file *drive.File, userID string) {
 	})
 }
 
+func (p *Plugin) handleMultipleActivitiesNotification(file *drive.File, userID string) {
+	p.createBotDMPost(userID, "There has been activity on this document", map[string]any{
+		"attachments": []any{map[string]any{
+			"title":       file.Name,
+			"title_link":  file.WebViewLink,
+			"footer":      "Google Drive for Mattermost",
+			"footer_icon": file.IconLink,
+		}},
+	})
+}
+
 func (p *Plugin) startDriveWatchChannel(userID string) error {
 	ctx := context.Background()
 	driveService, err := p.GoogleClient.NewDriveService(ctx, userID)

@@ -523,7 +523,12 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	var pageTokenErr error
 	var changes []*drive.Change
+	i := 0
 	for {
+		// Cap this loop at 5 iterations to prevent unbounded calls to the Google Drive API.
+		if i == 5 {
+			break
+		}
 		changeList, changeErr := driveService.ChangesList(c.Ctx, pageToken)
 		if changeErr != nil {
 			p.API.LogError("Failed to fetch Google Drive changes", "err", changeErr, "userID", userID)
@@ -531,13 +536,14 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			return
 		}
 		changes = append(changes, changeList.Changes...)
-		// NewStartPageToken will be empty if there is another page of results. This should only happen if this user changed over 20/30 files at once. There is no definitive number.
+		// NewStartPageToken will be empty if there is another page of results. This should only happen if this user changed over 20/30 files at once. There is no definitive number of changes that will be returned.
 		if changeList.NewStartPageToken != "" {
 			// Updated pageToken gets saved at the end along with the new FileLastActivity.
 			pageToken = changeList.NewStartPageToken
 			break
 		}
 		pageToken = changeList.NextPageToken
+		i++
 	}
 
 	defer func() {
@@ -570,9 +576,21 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			continue
 		}
 
-		modifiedTime, _ := time.Parse(time.RFC3339, change.File.ModifiedTime)
-		lastChangeTime, _ := time.Parse(time.RFC3339, change.Time)
-		viewedByMeTime, _ := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
+		modifiedTime, err := time.Parse(time.RFC3339, change.File.ModifiedTime)
+		if err != nil {
+			p.API.LogError("Failed to parse modified time", "err", err, "userID", userID)
+			continue
+		}
+		lastChangeTime, err := time.Parse(time.RFC3339, change.Time)
+		if err != nil {
+			p.API.LogError("Failed to parse last change time", "err", err, "userID", userID)
+			continue
+		}
+		viewedByMeTime, err := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
+		if err != nil {
+			p.API.LogError("Failed to parse viewed by me time", "err", err, "userID", userID)
+			continue
+		}
 
 		// Check if the user has already opened the file after the last change.
 		if lastChangeTime.Sub(modifiedTime) >= lastChangeTime.Sub(viewedByMeTime) {
@@ -607,51 +625,59 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 
 		var activities []*driveactivity.DriveActivity
+		i = 0
 		for {
+			// Cap this loop at 5 iterations to prevent unbounded calls to the Google Drive Activity API.
+			if i == 5 {
+				break
+			}
 			var activityRes *driveactivity.QueryDriveActivityResponse
 			activityRes, err = activitySrv.Query(c.Ctx, driveActivityQuery)
 			if err != nil {
 				p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", change.FileId, "userID", userID)
 				continue
 			}
-			activities = append(activities, activityRes.Activities...)
+			for _, activity := range activityRes.Activities {
+				if activity.PrimaryActionDetail.Comment != nil || activity.PrimaryActionDetail.PermissionChange != nil {
+					if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
+						continue
+					}
+					activities = append(activities, activity)
+				}
+			}
 			// NextPageToken is set when there are more than 1 page of activities for a file. We don't want the next page token if we are only fetching the latest activity.
-			if activityRes.NextPageToken != "" && driveActivityQuery.PageSize != 1 {
+			if (activityRes.NextPageToken != "" && driveActivityQuery.PageSize != 1) || (activityRes.NextPageToken != "" && len(activities) <= 5) {
 				driveActivityQuery.PageToken = activityRes.NextPageToken
 			} else {
 				break
 			}
+			i++
 		}
 
 		if len(activities) == 0 {
 			continue
 		}
-		newLastActivityTime := lastActivityTime
-		// Newest activity is at the end of the list so iterate through the list in reverse.
-		for i := len(activities) - 1; i >= 0; i-- {
-			activity := activities[i]
-			if activity.Timestamp > lastActivityTime {
-				newLastActivityTime = activity.Timestamp
-			}
-			if activity.PrimaryActionDetail.Comment != nil {
-				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
-					continue
+
+		// We don't want to spam the user with notifications if there are more than 5 activities.
+		if len(activities) > 5 {
+			p.handleMultipleActivitiesNotification(change.File, userID)
+		} else {
+			// Newest activity is at the end of the list so iterate through the list in reverse.
+			for i := len(activities) - 1; i >= 0; i-- {
+				activity := activities[i]
+				if activity.PrimaryActionDetail.Comment != nil {
+					p.handleCommentNotifications(c.Ctx, driveService, change.File, userID, activity)
 				}
-				p.handleCommentNotifications(c.Ctx, driveService, change.File, userID, activity)
-			}
-			if activity.PrimaryActionDetail.PermissionChange != nil {
-				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
-					continue
+
+				if activity.PrimaryActionDetail.PermissionChange != nil {
+					p.handleFileSharedNotification(change.File, userID)
 				}
-				p.handleFileSharedNotification(change.File, userID)
 			}
 		}
 
-		if newLastActivityTime > lastActivityTime {
-			err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, newLastActivityTime)
-			if err != nil {
-				p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
-			}
+		err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ModifiedTime)
+		if err != nil {
+			p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
 		}
 	}
 
