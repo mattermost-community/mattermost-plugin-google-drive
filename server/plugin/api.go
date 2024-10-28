@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/mux"
 	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/logger"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
@@ -459,7 +458,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	resourceState := r.Header.Get("X-Goog-Resource-State")
 	userID := r.URL.Query().Get("userID")
 
-	_, _ = p.Client.KV.Set("userID-"+userID, userID, pluginapi.SetExpiry(20))
 	if resourceState != "change" {
 		w.WriteHeader(http.StatusOK)
 		return
