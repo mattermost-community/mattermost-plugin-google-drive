@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/mux"
 	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/logger"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
 	"github.com/pkg/errors"
@@ -24,6 +23,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
 
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/pluginapi"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
@@ -465,13 +465,13 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
-		p.API.LogError("Unable to fund watch channel data", "err", err, "userID", userID)
+		p.API.LogError("Unable to find watch channel data", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	token := r.Header.Get("X-Goog-Channel-Token")
-	if watchChannelData.Token != token {
+	if watchChannelData.Token == "" || watchChannelData.Token != token {
 		p.API.LogError("Invalid channel token", "userID", userID)
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -484,8 +484,9 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
+	clusterService := pluginapi.NewClusterService(p.API)
 	// Mutex to prevent race conditions from multiple requests directed at the same user in a short period of time.
-	m, err := cluster.NewMutex(p.API, "drive_watch_notifications_"+userID)
+	m, err := clusterService.NewMutex("drive_watch_notifications_" + userID)
 	if err != nil {
 		p.API.LogError("Failed to create mutex", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)

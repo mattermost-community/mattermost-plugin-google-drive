@@ -47,7 +47,7 @@ const (
 	driveActivityServiceType = "driveactivity"
 )
 
-func NewGoogleClient(oauthConfig *oauth2.Config, config *config.Configuration, kvstore kvstore.KVStore, papi plugin.API) *Client {
+func NewGoogleClient(oauthConfig *oauth2.Config, config *config.Configuration, kvstore kvstore.KVStore, papi plugin.API) ClientInterface {
 	maximumQueriesPerSecond := config.QueriesPerMinute / 60
 	burstSize := config.BurstSize
 
@@ -60,8 +60,8 @@ func NewGoogleClient(oauthConfig *oauth2.Config, config *config.Configuration, k
 	}
 }
 
-func (g *Client) NewDriveService(ctx context.Context, userID string) (*DriveService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewDriveService(ctx context.Context, userID string) (DriveInterface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,8 +93,8 @@ func (g *Client) NewDriveService(ctx context.Context, userID string) (*DriveServ
 	}, nil
 }
 
-func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (*DriveServiceV2, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (DriveV2Interface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (*DriveSe
 }
 
 func (g *Client) NewDocsService(ctx context.Context, userID string) (*DocsService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (g *Client) NewDocsService(ctx context.Context, userID string) (*DocsServic
 }
 
 func (g *Client) NewSlidesService(ctx context.Context, userID string) (*SlidesService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func (g *Client) NewSlidesService(ctx context.Context, userID string) (*SlidesSe
 }
 
 func (g *Client) NewSheetsService(ctx context.Context, userID string) (*SheetsService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -210,8 +210,8 @@ func (g *Client) NewSheetsService(ctx context.Context, userID string) (*SheetsSe
 	}, nil
 }
 
-func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (*DriveActivityService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (DriveActivityInterface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (*D
 	}, nil
 }
 
-func (g *Client) getGoogleUserToken(userID string) (*oauth2.Token, error) {
+func (g *Client) GetGoogleUserToken(userID string) (*oauth2.Token, error) {
 	encryptedToken, err := g.kvstore.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err

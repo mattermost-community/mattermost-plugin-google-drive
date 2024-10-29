@@ -52,7 +52,7 @@ type Plugin struct {
 
 	channelRefreshJob *cluster.Job
 
-	GoogleClient *google.Client
+	GoogleClient google.ClientInterface
 }
 
 func (p *Plugin) ensurePluginAPIClient() {
