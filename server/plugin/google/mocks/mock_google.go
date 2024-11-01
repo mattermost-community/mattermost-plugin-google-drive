@@ -52,10 +52,10 @@ func (mr *MockClientInterfaceMockRecorder) GetGoogleUserToken(arg0 interface{}) 
 }
 
 // NewDocsService mocks base method.
-func (m *MockClientInterface) NewDocsService(arg0 context.Context, arg1 string) (*google.DocsService, error) {
+func (m *MockClientInterface) NewDocsService(arg0 context.Context, arg1 string) (google.DocsInterface, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewDocsService", arg0, arg1)
-	ret0, _ := ret[0].(*google.DocsService)
+	ret0, _ := ret[0].(google.DocsInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -112,10 +112,10 @@ func (mr *MockClientInterfaceMockRecorder) NewDriveV2Service(arg0, arg1 interfac
 }
 
 // NewSheetsService mocks base method.
-func (m *MockClientInterface) NewSheetsService(arg0 context.Context, arg1 string) (*google.SheetsService, error) {
+func (m *MockClientInterface) NewSheetsService(arg0 context.Context, arg1 string) (google.SheetsInterface, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewSheetsService", arg0, arg1)
-	ret0, _ := ret[0].(*google.SheetsService)
+	ret0, _ := ret[0].(google.SheetsInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -127,10 +127,10 @@ func (mr *MockClientInterfaceMockRecorder) NewSheetsService(arg0, arg1 interface
 }
 
 // NewSlidesService mocks base method.
-func (m *MockClientInterface) NewSlidesService(arg0 context.Context, arg1 string) (*google.SlidesService, error) {
+func (m *MockClientInterface) NewSlidesService(arg0 context.Context, arg1 string) (google.SlidesInterface, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewSlidesService", arg0, arg1)
-	ret0, _ := ret[0].(*google.SlidesService)
+	ret0, _ := ret[0].(google.SlidesInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

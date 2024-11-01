@@ -378,6 +378,11 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	var fileCreationErr error
 	createdFileID := ""
 	fileType := r.URL.Query().Get("type")
+	if fileType == "" {
+		c.Log.Errorf("File type not found in the request")
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
+		return
+	}
 	switch fileType {
 	case "doc":
 		{

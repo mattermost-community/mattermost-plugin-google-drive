@@ -126,7 +126,7 @@ func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (DriveV2I
 	}, nil
 }
 
-func (g *Client) NewDocsService(ctx context.Context, userID string) (*DocsService, error) {
+func (g *Client) NewDocsService(ctx context.Context, userID string) (DocsInterface, error) {
 	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
@@ -154,7 +154,7 @@ func (g *Client) NewDocsService(ctx context.Context, userID string) (*DocsServic
 	}, nil
 }
 
-func (g *Client) NewSlidesService(ctx context.Context, userID string) (*SlidesService, error) {
+func (g *Client) NewSlidesService(ctx context.Context, userID string) (SlidesInterface, error) {
 	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func (g *Client) NewSlidesService(ctx context.Context, userID string) (*SlidesSe
 	}, nil
 }
 
-func (g *Client) NewSheetsService(ctx context.Context, userID string) (*SheetsService, error) {
+func (g *Client) NewSheetsService(ctx context.Context, userID string) (SheetsInterface, error) {
 	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err

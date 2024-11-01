@@ -4,18 +4,21 @@ import (
 	"context"
 
 	"golang.org/x/oauth2"
+	"google.golang.org/api/docs/v1"
 	driveV2 "google.golang.org/api/drive/v2"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/sheets/v4"
+	"google.golang.org/api/slides/v1"
 )
 
 type ClientInterface interface {
 	NewDriveService(ctx context.Context, userID string) (DriveInterface, error)
 	NewDriveV2Service(ctx context.Context, userID string) (DriveV2Interface, error)
-	NewDocsService(ctx context.Context, userID string) (*DocsService, error)
-	NewSlidesService(ctx context.Context, userID string) (*SlidesService, error)
-	NewSheetsService(ctx context.Context, userID string) (*SheetsService, error)
+	NewDocsService(ctx context.Context, userID string) (DocsInterface, error)
+	NewSlidesService(ctx context.Context, userID string) (SlidesInterface, error)
+	NewSheetsService(ctx context.Context, userID string) (SheetsInterface, error)
 	NewDriveActivityService(ctx context.Context, userID string) (DriveActivityInterface, error)
 	GetGoogleUserToken(userID string) (*oauth2.Token, error)
 	ReloadRateLimits(newQueriesPerMinute int, newBurstSize int)
@@ -40,4 +43,16 @@ type DriveV2Interface interface {
 
 type DriveActivityInterface interface {
 	Query(ctx context.Context, request *driveactivity.QueryDriveActivityRequest) (*driveactivity.QueryDriveActivityResponse, error)
+}
+
+type DocsInterface interface {
+	Create(ctx context.Context, document *docs.Document) (*docs.Document, error)
+}
+
+type SheetsInterface interface {
+	Create(ctx context.Context, spreadsheet *sheets.Spreadsheet) (*sheets.Spreadsheet, error)
+}
+
+type SlidesInterface interface {
+	Create(ctx context.Context, presentation *slides.Presentation) (*slides.Presentation, error)
 }
