@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	mattermostModel "github.com/mattermost/mattermost/server/public/model"
+	"google.golang.org/api/drive/v3"
+
 	mock_google "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google/mocks"
 	mock_store "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore/mocks"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
-	mattermostModel "github.com/mattermost/mattermost/server/public/model"
-	"google.golang.org/api/drive/v3"
 )
 
 func TestRefreshDriveWatchChannels(t *testing.T) {
@@ -33,8 +34,8 @@ func TestRefreshDriveWatchChannels(t *testing.T) {
 	t.Run("processes channels correctly", func(t *testing.T) {
 		channel1 := &model.WatchChannelData{MMUserID: "userId1", Expiration: time.Now().Add(23 * time.Hour).Unix(), ChannelID: "channel1", ResourceID: "resource1"}
 		channel2 := &model.WatchChannelData{MMUserID: "userId2", Expiration: time.Now().Add(23 * time.Hour).Unix(), ChannelID: "channel2", ResourceID: "resource2"}
-		siteUrl := "http://localhost"
-		te.mockAPI.On("GetConfig").Return(&mattermostModel.Config{ServiceSettings: mattermostModel.ServiceSettings{SiteURL: &siteUrl}})
+		siteURL := "http://localhost"
+		te.mockAPI.On("GetConfig").Return(&mattermostModel.Config{ServiceSettings: mattermostModel.ServiceSettings{SiteURL: &siteURL}})
 
 		mockKVStore.EXPECT().ListWatchChannelDataKeys(gomock.Any(), gomock.Any()).Return([]string{"key1", "key2"}, nil).Times(1)
 		mockKVStore.EXPECT().ListWatchChannelDataKeys(gomock.Any(), gomock.Any()).Return([]string{}, nil).Times(1)

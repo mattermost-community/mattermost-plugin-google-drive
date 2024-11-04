@@ -295,11 +295,11 @@ func TestNotificationWebhook(t *testing.T) {
 					ItemName: fmt.Sprintf("items/%s", file.Id),
 					Filter:   "time > \"" + file.ModifiedTime + "\"",
 				}).Return(activityResponse, nil).MaxTimes(1)
-				commentId := activityResponse.Activities[0].Targets[0].FileComment.LegacyCommentId
-				comment := GetSampleComment(commentId)
-				mockGoogleDrive.EXPECT().GetComments(context.Background(), file.Id, commentId).Return(comment, nil)
-				siteUrl := "http://localhost"
-				te.mockAPI.On("GetConfig").Return(&mattermostModel.Config{ServiceSettings: mattermostModel.ServiceSettings{SiteURL: &siteUrl}})
+				commentID := activityResponse.Activities[0].Targets[0].FileComment.LegacyCommentId
+				comment := GetSampleComment(commentID)
+				mockGoogleDrive.EXPECT().GetComments(context.Background(), file.Id, commentID).Return(comment, nil)
+				siteURL := "http://localhost"
+				te.mockAPI.On("GetConfig").Return(&mattermostModel.Config{ServiceSettings: mattermostModel.ServiceSettings{SiteURL: &siteURL}})
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				post := &mattermostModel.Post{
 					UserId:    te.plugin.BotUserID,
@@ -314,7 +314,7 @@ func TestNotificationWebhook(t *testing.T) {
 									map[string]any{
 										"name": "Reply to comment",
 										"integration": map[string]any{
-											"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", siteUrl, Manifest.Id),
+											"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", siteURL, Manifest.Id),
 											"context": map[string]any{
 												"commentID": comment.Id,
 												"fileID":    file.Id,

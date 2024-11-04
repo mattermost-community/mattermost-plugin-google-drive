@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
-	mock_pluginapi "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/pluginapi/mocks"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"google.golang.org/api/docs/v1"
@@ -13,6 +11,9 @@ import (
 	"google.golang.org/api/driveactivity/v2"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
+
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	mock_pluginapi "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/pluginapi/mocks"
 
 	mock_google "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google/mocks"
 
@@ -140,10 +141,10 @@ func GetSampleDriveactivityPermissionResponse() *driveactivity.QueryDriveActivit
 	}
 }
 
-func GetSampleComment(commentId string) *drive.Comment {
+func GetSampleComment(commentID string) *drive.Comment {
 	return &drive.Comment{
 		Content: "comment1",
-		Id:      commentId,
+		Id:      commentID,
 		Author: &drive.User{
 			DisplayName: "author1",
 		},
@@ -184,9 +185,9 @@ func GetSamplePresentation() *slides.Presentation {
 	}
 }
 
-func GetSampleFile(fileId string) *drive.File {
+func GetSampleFile(fileID string) *drive.File {
 	return &drive.File{
-		Id:             fileId,
+		Id:             fileID,
 		ViewedByMeTime: "2020-01-01T00:00:00.000Z",
 		ModifiedTime:   "2021-01-01T00:00:00.000Z",
 		CreatedTime:    "2021-01-01T00:00:00.000Z",
