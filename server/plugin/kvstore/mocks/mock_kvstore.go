@@ -166,6 +166,21 @@ func (mr *MockKVStoreMockRecorder) GetWatchChannelData(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWatchChannelData", reflect.TypeOf((*MockKVStore)(nil).GetWatchChannelData), arg0)
 }
 
+// GetWatchChannelDataUsingKey mocks base method.
+func (m *MockKVStore) GetWatchChannelDataUsingKey(arg0 string) (*model.WatchChannelData, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWatchChannelDataUsingKey", arg0)
+	ret0, _ := ret[0].(*model.WatchChannelData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWatchChannelDataUsingKey indicates an expected call of GetWatchChannelDataUsingKey.
+func (mr *MockKVStoreMockRecorder) GetWatchChannelDataUsingKey(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWatchChannelDataUsingKey", reflect.TypeOf((*MockKVStore)(nil).GetWatchChannelDataUsingKey), arg0)
+}
+
 // ListWatchChannelDataKeys mocks base method.
 func (m *MockKVStore) ListWatchChannelDataKeys(arg0, arg1 int) ([]string, error) {
 	m.ctrl.T.Helper()

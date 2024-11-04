@@ -644,3 +644,161 @@ func TestFileCreationEndpoint(t *testing.T) {
 		})
 	}
 }
+
+func TestUploadFile(t *testing.T) {
+	mockKvStore, mockGoogleClient, mockGoogleDrive, _, _, _, _, _, _ := GetMockSetup(t)
+
+	for name, test := range map[string]struct {
+		expectedStatusCode int
+		submission         *mattermostModel.SubmitDialogRequest
+		envSetup           func(ctx context.Context, te *TestEnvironment)
+	}{
+		"No file provided": {
+			expectedStatusCode: http.StatusBadRequest,
+			submission: &mattermostModel.SubmitDialogRequest{
+				Submission: map[string]any{},
+			},
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("LogError", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string"))
+			},
+		},
+		"Empty fileID in submission": {
+			expectedStatusCode: http.StatusBadRequest,
+			submission: &mattermostModel.SubmitDialogRequest{
+				Submission: map[string]any{
+					"fileID": "",
+				},
+			},
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("LogError", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string"))
+			},
+		},
+		"Create File on Google Drive send ephemeral post": {
+			expectedStatusCode: http.StatusOK,
+			submission: &mattermostModel.SubmitDialogRequest{
+				Submission: map[string]any{
+					"fileID": "fileId1",
+				},
+			},
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("GetFileInfo", "fileId1").Return(&mattermostModel.FileInfo{
+					Id:     "fileId1",
+					PostId: "postId1",
+					Name:   "file name",
+				}, nil)
+				te.mockAPI.On("GetFile", "fileId1").Return([]byte{}, nil)
+				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil)
+				mockGoogleDrive.EXPECT().CreateFile(ctx, &drive.File{Name: "file name"}, []byte{}).Return(nil, nil)
+				te.mockAPI.On("SendEphemeralPost", "userId1", mock.Anything).Return(nil)
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			te := SetupTestEnvironment(t)
+			defer te.Cleanup(t)
+
+			te.plugin.KVStore = mockKvStore
+			te.plugin.GoogleClient = mockGoogleClient
+			te.plugin.initializeAPI()
+
+			w := httptest.NewRecorder()
+
+			var body bytes.Buffer
+			err := json.NewEncoder(&body).Encode(test.submission)
+			if err != nil {
+				require.NoError(t, err)
+			}
+			r := httptest.NewRequest(http.MethodPost, "/upload", &body)
+			r.Header.Set("Mattermost-User-ID", "userId1")
+			ctx, _ := te.plugin.createContext(w, r)
+
+			test.envSetup(ctx.Ctx, te)
+			te.plugin.handleFileUpload(ctx, w, r)
+
+			result := w.Result()
+			require.NotNil(t, result)
+			defer result.Body.Close()
+			assert.Equal(test.expectedStatusCode, result.StatusCode)
+		})
+	}
+}
+
+func TestUploadMultipleFiles(t *testing.T) {
+	mockKvStore, mockGoogleClient, mockGoogleDrive, _, _, _, _, _, _ := GetMockSetup(t)
+
+	for name, test := range map[string]struct {
+		expectedStatusCode int
+		submission         *mattermostModel.SubmitDialogRequest
+		envSetup           func(ctx context.Context, te *TestEnvironment)
+	}{
+		"No postId provided": {
+			expectedStatusCode: http.StatusBadRequest,
+			submission: &mattermostModel.SubmitDialogRequest{
+				State: "",
+			},
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("GetPost", "").Return(nil, &mattermostModel.AppError{
+					Message: "No post provided",
+				})
+				te.mockAPI.On("LogError", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything, mock.Anything)
+			},
+		},
+		"PostId with multiple file attachments": {
+			expectedStatusCode: http.StatusOK,
+			submission: &mattermostModel.SubmitDialogRequest{
+				State: "postId1",
+			},
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("GetPost", "postId1").Return(&mattermostModel.Post{
+					Id:      "postId1",
+					FileIds: []string{"fileId1", "fileId2"},
+				}, nil)
+				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil)
+				te.mockAPI.On("GetFileInfo", "fileId1").Return(&mattermostModel.FileInfo{
+					Id:     "fileId1",
+					PostId: "postId1",
+					Name:   "file name",
+				}, nil)
+				te.mockAPI.On("GetFile", "fileId1").Return([]byte{}, nil)
+				te.mockAPI.On("GetFileInfo", "fileId2").Return(&mattermostModel.FileInfo{
+					Id:     "fileId1",
+					PostId: "postId1",
+					Name:   "file name",
+				}, nil)
+				te.mockAPI.On("GetFile", "fileId2").Return([]byte{}, nil)
+				mockGoogleDrive.EXPECT().CreateFile(ctx, &drive.File{Name: "file name"}, []byte{}).Return(nil, nil).Times(2)
+				te.mockAPI.On("SendEphemeralPost", "userId1", mock.Anything).Return(nil)
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			te := SetupTestEnvironment(t)
+			defer te.Cleanup(t)
+
+			te.plugin.KVStore = mockKvStore
+			te.plugin.GoogleClient = mockGoogleClient
+			te.plugin.initializeAPI()
+
+			w := httptest.NewRecorder()
+
+			var body bytes.Buffer
+			err := json.NewEncoder(&body).Encode(test.submission)
+			if err != nil {
+				require.NoError(t, err)
+			}
+			r := httptest.NewRequest(http.MethodPost, "/upload", &body)
+			r.Header.Set("Mattermost-User-ID", "userId1")
+			ctx, _ := te.plugin.createContext(w, r)
+
+			test.envSetup(ctx.Ctx, te)
+			te.plugin.handleAllFilesUpload(ctx, w, r)
+
+			result := w.Result()
+			require.NotNil(t, result)
+			defer result.Body.Close()
+			assert.Equal(test.expectedStatusCode, result.StatusCode)
+		})
+	}
+}

@@ -314,7 +314,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 
 	err = p.KVStore.DeleteWatchChannelData(userID)
 	if err != nil {
-		p.API.LogError("Failed to delete Google Drive watch channel data", "err", err)
+		p.API.LogError("Failed to delete Google Drive watch channel data", "err", err, "userID", userID)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
@@ -323,7 +323,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 		ResourceId: watchChannelData.ResourceID,
 	})
 	if err != nil {
-		p.API.LogError("Failed to stop Google Drive change channel", "err", err)
+		p.API.LogError("Failed to stop Google Drive change channel", "err", err, "userID", userID)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 

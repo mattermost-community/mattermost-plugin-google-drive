@@ -51,6 +51,16 @@ func (kv Impl) GetWatchChannelData(userID string) (*model.WatchChannelData, erro
 	return &watchChannelData, nil
 }
 
+func (kv Impl) GetWatchChannelDataUsingKey(key string) (*model.WatchChannelData, error) {
+	var watchChannelData model.WatchChannelData
+
+	err := kv.client.KV.Get(key, &watchChannelData)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get watch channel data")
+	}
+	return &watchChannelData, nil
+}
+
 func (kv Impl) ListWatchChannelDataKeys(page, perPage int) ([]string, error) {
 	watchChannelKey := getWatchChannelDataKey("")
 	keys, err := kv.client.KV.ListKeys(page, perPage, pluginapi.WithPrefix(watchChannelKey))
