@@ -259,7 +259,7 @@ func (g *Client) GetGoogleUserToken(userID string) (*oauth2.Token, error) {
 	return &oauthToken, err
 }
 
-func (ds googleServiceBase) parseGoogleErrors(ctx context.Context, apiErr error) error {
+func (ds googleServiceBase) checkForRateLimitErrors(apiErr error) error {
 	if googleErr, ok := apiErr.(*googleapi.Error); ok {
 		reason := ""
 		if len(googleErr.Errors) > 0 {

@@ -18,7 +18,7 @@ func (ds *SheetsService) Create(ctx context.Context, spreadsheet *sheets.Spreads
 	}
 	p, err := ds.service.Spreadsheets.Create(spreadsheet).Do()
 	if err != nil {
-		err = ds.parseGoogleErrors(ctx, err)
+		err = ds.checkForRateLimitErrors(err)
 		return nil, err
 	}
 	return p, nil

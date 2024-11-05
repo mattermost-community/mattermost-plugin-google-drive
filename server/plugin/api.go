@@ -570,17 +570,17 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 		modifiedTime, err := time.Parse(time.RFC3339, change.File.ModifiedTime)
 		if err != nil {
-			p.API.LogError("Failed to parse modified time", "err", err, "userID", userID)
+			p.API.LogError("Failed to parse modified time", "err", err, "userID", userID, "modifiedTime", change.File.ModifiedTime)
 			continue
 		}
 		lastChangeTime, err := time.Parse(time.RFC3339, change.Time)
 		if err != nil {
-			p.API.LogError("Failed to parse last change time", "err", err, "userID", userID)
+			p.API.LogError("Failed to parse last change time", "err", err, "userID", userID, "lastChangeTime", change.Time)
 			continue
 		}
 		viewedByMeTime, err := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
 		if err != nil {
-			p.API.LogError("Failed to parse viewed by me time", "err", err, "userID", userID)
+			p.API.LogError("Failed to parse viewed by me time", "err", err, "userID", userID, "viewedByMeTime", change.File.ViewedByMeTime)
 			continue
 		}
 

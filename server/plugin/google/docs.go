@@ -18,7 +18,7 @@ func (ds *DocsService) Create(ctx context.Context, doc *docs.Document) (*docs.Do
 	}
 	d, err := ds.service.Documents.Create(doc).Do()
 	if err != nil {
-		err = ds.parseGoogleErrors(ctx, err)
+		err = ds.checkForRateLimitErrors(err)
 		return nil, err
 	}
 	return d, nil
