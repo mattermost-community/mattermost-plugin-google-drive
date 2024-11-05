@@ -134,9 +134,9 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 	config := p.API.GetConfig()
 	var permissionError error
 
-	for _, permission := range permissions {
+	for i, permission := range permissions {
 		// Continue through the permissions loop when we encounter an error so we can inform the user who wasn't granted access.
-		if permissionError != nil {
+		if permissionError != nil || i > 60 {
 			usersWithoutAccesss = appendUsersWithoutAccessSlice(config, usersWithoutAccesss, userMap[permission.EmailAddress].Username, permission.EmailAddress)
 			continue
 		}
