@@ -2,6 +2,7 @@ package kvstore
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -30,6 +31,14 @@ func getUserTokenKey(userID string) string {
 
 func getLastActivityKey(userID, fileID string) string {
 	return fmt.Sprintf("last_activity-%s-%s", userID, fileID)
+}
+
+func getUserRateLimitKey(serviceType string, userID string) string {
+	return fmt.Sprintf("user-rate_limited-%s-%s", serviceType, userID)
+}
+
+func getProjectRateLimitKey(serviceType string) string {
+	return fmt.Sprintf("user-rate_limited-%s", serviceType)
 }
 
 func (kv Impl) GetWatchChannelData(userID string) (*model.WatchChannelData, error) {
@@ -144,4 +153,44 @@ func (kv Impl) DeleteGoogleUserToken(userID string) error {
 		return errors.Wrap(err, "failed to delete user token")
 	}
 	return nil
+}
+
+func (kv Impl) StoreUserRateLimitExceeded(serviceType string, userID string) error {
+	saved, err := kv.client.KV.Set(getUserRateLimitKey(serviceType, userID), []byte("true"), pluginapi.SetExpiry(time.Second*10))
+	if !saved && err != nil {
+		return errors.Wrap(err, "database error occurred when trying to save user rate limit exceeded")
+	} else if !saved && err == nil {
+		return errors.New("Failed to save user rate limit exceeded")
+	}
+	return nil
+}
+
+func (kv Impl) GetUserRateLimitExceeded(serviceType string, userID string) (bool, error) {
+	var rateLimitExceeded bool
+
+	err := kv.client.KV.Get(getUserRateLimitKey(serviceType, userID), &rateLimitExceeded)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to get user rate limit exceeded")
+	}
+	return rateLimitExceeded, nil
+}
+
+func (kv Impl) StoreProjectRateLimitExceeded(serviceType string) error {
+	saved, err := kv.client.KV.Set(getProjectRateLimitKey(serviceType), []byte("true"), pluginapi.SetExpiry(time.Second*10))
+	if !saved && err != nil {
+		return errors.Wrap(err, "database error occurred when trying to save project rate limit exceeded")
+	} else if !saved && err == nil {
+		return errors.New("Failed to save project rate limit exceeded")
+	}
+	return nil
+}
+
+func (kv Impl) GetProjectRateLimitExceeded(serviceType string) (bool, error) {
+	var rateLimitExceeded bool
+
+	err := kv.client.KV.Get(getProjectRateLimitKey(serviceType), &rateLimitExceeded)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to get project rate limit exceeded")
+	}
+	return rateLimitExceeded, nil
 }

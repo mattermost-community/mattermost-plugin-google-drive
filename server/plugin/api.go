@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,7 +21,6 @@ import (
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
-	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
 
@@ -48,10 +46,6 @@ type Context struct {
 	Log    logger.Logger
 }
 
-type UserContext struct {
-	Context
-}
-
 type FileCreationRequest struct {
 	Name           string `json:"name"`
 	FileAccess     string `json:"file_access"`
@@ -74,9 +68,6 @@ type DialogErrorResponse struct {
 	Error      string `json:"error"`
 	StatusCode int    `json:"status_code"`
 }
-
-// HTTPHandlerFuncWithUserContext is http.HandleFunc but with a UserContext attached
-type HTTPHandlerFuncWithUserContext func(c *UserContext, w http.ResponseWriter, r *http.Request)
 
 // HTTPHandlerFuncWithContext is http.HandleFunc but with a Context attached
 type HTTPHandlerFuncWithContext func(c *Context, w http.ResponseWriter, r *http.Request)
@@ -379,17 +370,8 @@ func getRawRequestAndFileCreationParams(r *http.Request) (*FileCreationRequest, 
 func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.Request) {
 	fileCreationParams, request, err := getRawRequestAndFileCreationParams(r)
 	if err != nil {
-		p.API.LogError("Failed to get fileCreationParams", "err", err)
+		c.Log.WithError(err).Errorf("Failed to get fileCreationParams")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
-		return
-	}
-
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(request.UserId)
-	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -399,15 +381,15 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	switch fileType {
 	case "doc":
 		{
-			srv, dErr := docs.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			srv, dErr := p.GoogleClient.NewDocsService(c.Ctx, c.UserID)
 			if dErr != nil {
-				p.API.LogError("Failed to create Google Docs client", "err", dErr)
+				c.Log.WithError(dErr).Errorf("Failed to create Google Docs client")
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			doc, dErr := srv.Documents.Create(&docs.Document{
+			doc, dErr := srv.Create(c.Ctx, &docs.Document{
 				Title: fileCreationParams.Name,
-			}).Do()
+			})
 			if dErr != nil {
 				fileCreationErr = dErr
 				break
@@ -416,15 +398,15 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		}
 	case "slide":
 		{
-			srv, dErr := slides.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			srv, dErr := p.GoogleClient.NewSlidesService(c.Ctx, c.UserID)
 			if dErr != nil {
-				p.API.LogError("Failed to create Google Slides client", "err", dErr)
+				c.Log.WithError(dErr).Errorf("Failed to create Google Slides client")
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			slide, dErr := srv.Presentations.Create(&slides.Presentation{
+			slide, dErr := srv.Create(c.Ctx, &slides.Presentation{
 				Title: fileCreationParams.Name,
-			}).Do()
+			})
 			if dErr != nil {
 				fileCreationErr = dErr
 				break
@@ -433,17 +415,17 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		}
 	case "sheet":
 		{
-			srv, dErr := sheets.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
+			srv, dErr := p.GoogleClient.NewSheetsService(c.Ctx, c.UserID)
 			if dErr != nil {
-				p.API.LogError("Failed to create Google Sheets client", "err", dErr)
+				c.Log.WithError(dErr).Errorf("Failed to create Google Sheets client")
 				p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 				return
 			}
-			sheet, dErr := srv.Spreadsheets.Create(&sheets.Spreadsheet{
+			sheet, dErr := srv.Create(c.Ctx, &sheets.Spreadsheet{
 				Properties: &sheets.SpreadsheetProperties{
 					Title: fileCreationParams.Name,
 				},
-			}).Do()
+			})
 			if dErr != nil {
 				fileCreationErr = dErr
 				break
@@ -453,20 +435,20 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	}
 
 	if fileCreationErr != nil {
-		p.API.LogError("Failed to create Google Drive file", "err", fileCreationErr)
+		c.Log.WithError(fileCreationErr).Errorf("Failed to create Google Drive file")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
-	err = p.handleFilePermissions(request.UserId, createdFileID, fileCreationParams.FileAccess, request.ChannelId, fileCreationParams.Name)
+	err = p.handleFilePermissions(c.Ctx, c.UserID, createdFileID, fileCreationParams.FileAccess, request.ChannelId, fileCreationParams.Name)
 	if err != nil {
-		p.API.LogError("Failed to modify file permissions", "err", err)
+		c.Log.WithError(err).Errorf("Failed to modify file permissions")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "File was successfully created but file permissions failed to apply. Please contact your system administrator.", StatusCode: http.StatusInternalServerError})
 		return
 	}
-	err = p.sendFileCreatedMessage(request.ChannelId, createdFileID, request.UserId, fileCreationParams.Message, fileCreationParams.ShareInChannel, authToken)
+	err = p.sendFileCreatedMessage(c.Ctx, request.ChannelId, createdFileID, c.UserID, fileCreationParams.Message, fileCreationParams.ShareInChannel)
 	if err != nil {
-		p.API.LogError("Failed to send file creation post", "err", err)
+		c.Log.WithError(err).Errorf("Failed to send file creation post")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{Error: "File was successfully created but failed to share to the channel. Please contact your system administrator.", StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -495,15 +477,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(userID)
-	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err, "userID", userID)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, userID)
 	if err != nil {
 		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -536,7 +510,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 	pageToken := watchChannelData.PageToken
 	if pageToken == "" {
 		// This is to catch any edge cases where the pageToken is not set.
-		tokenResponse, tokenErr := srv.Changes.GetStartPageToken().Do()
+		tokenResponse, tokenErr := driveService.GetStartPageToken(c.Ctx)
 		if tokenErr != nil {
 			p.API.LogError("Failed to get start page token", "err", tokenErr, "userID", userID)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -547,21 +521,27 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	var pageTokenErr error
 	var changes []*drive.Change
+	i := 0
 	for {
-		changeList, changeErr := srv.Changes.List(pageToken).Fields("*").Do()
+		// Cap this loop at 5 iterations to prevent unbounded calls to the Google Drive API.
+		if i == 5 {
+			break
+		}
+		changeList, changeErr := driveService.ChangesList(c.Ctx, pageToken)
 		if changeErr != nil {
 			p.API.LogError("Failed to fetch Google Drive changes", "err", changeErr, "userID", userID)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		changes = append(changes, changeList.Changes...)
-		// NewStartPageToken will be empty if there is another page of results. This should only happen if this user changed over 20/30 files at once. There is no definitive number.
+		// NewStartPageToken will be empty if there is another page of results. This should only happen if this user changed over 20/30 files at once. There is no definitive number of changes that will be returned.
 		if changeList.NewStartPageToken != "" {
 			// Updated pageToken gets saved at the end along with the new FileLastActivity.
 			pageToken = changeList.NewStartPageToken
 			break
 		}
 		pageToken = changeList.NextPageToken
+		i++
 	}
 
 	defer func() {
@@ -581,7 +561,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	activitySrv, err := driveactivity.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
+	activitySrv, err := p.GoogleClient.NewDriveActivityService(c.Ctx, userID)
 	if err != nil {
 		pageTokenErr = err
 		p.API.LogError("Failed to fetch Google Drive changes", "err", err, "userID", userID)
@@ -594,12 +574,28 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			continue
 		}
 
-		modifiedTime, _ := time.Parse(time.RFC3339, change.File.ModifiedTime)
-		lastChangeTime, _ := time.Parse(time.RFC3339, change.Time)
-		viewedByMeTime, _ := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
+		modifiedTime, err := time.Parse(time.RFC3339, change.File.ModifiedTime)
+		if err != nil {
+			p.API.LogError("Failed to parse modified time", "err", err, "userID", userID, "modifiedTime", change.File.ModifiedTime)
+			continue
+		}
+		lastChangeTime, err := time.Parse(time.RFC3339, change.Time)
+		if err != nil {
+			p.API.LogError("Failed to parse last change time", "err", err, "userID", userID, "lastChangeTime", change.Time)
+			continue
+		}
+		viewedByMeTime, err := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
+		if err != nil {
+			p.API.LogError("Failed to parse viewed by me time", "err", err, "userID", userID, "viewedByMeTime", change.File.ViewedByMeTime)
+			continue
+		}
 
 		// Check if the user has already opened the file after the last change.
-		if lastChangeTime.Sub(modifiedTime) > lastChangeTime.Sub(viewedByMeTime) {
+		if lastChangeTime.Sub(modifiedTime) >= lastChangeTime.Sub(viewedByMeTime) {
+			err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ViewedByMeTime)
+			if err != nil {
+				p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
+			}
 			continue
 		}
 
@@ -613,6 +609,10 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			continue
 		}
 
+		if change.File.ViewedByMeTime > lastActivityTime {
+			lastActivityTime = change.File.ViewedByMeTime
+		}
+
 		// If we have a last activity timestamp for this file we can use it to filter the activities.
 		if lastActivityTime != "" {
 			driveActivityQuery.Filter = "time > \"" + lastActivityTime + "\""
@@ -623,54 +623,59 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 
 		var activities []*driveactivity.DriveActivity
+		i = 0
 		for {
+			// Cap this loop at 5 iterations to prevent unbounded calls to the Google Drive Activity API.
+			if i == 5 {
+				break
+			}
 			var activityRes *driveactivity.QueryDriveActivityResponse
-			activityRes, err = activitySrv.Activity.Query(driveActivityQuery).Do()
+			activityRes, err = activitySrv.Query(c.Ctx, driveActivityQuery)
 			if err != nil {
 				p.API.LogError("Failed to fetch google drive activity", "err", err, "fileID", change.FileId, "userID", userID)
 				continue
 			}
-			activities = append(activities, activityRes.Activities...)
+			for _, activity := range activityRes.Activities {
+				if activity.PrimaryActionDetail.Comment != nil || activity.PrimaryActionDetail.PermissionChange != nil {
+					if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
+						continue
+					}
+					activities = append(activities, activity)
+				}
+			}
 			// NextPageToken is set when there are more than 1 page of activities for a file. We don't want the next page token if we are only fetching the latest activity.
-			if activityRes.NextPageToken != "" && driveActivityQuery.PageSize != 1 {
+			if (activityRes.NextPageToken != "" && driveActivityQuery.PageSize != 1) || (activityRes.NextPageToken != "" && len(activities) <= 5) {
 				driveActivityQuery.PageToken = activityRes.NextPageToken
 			} else {
 				break
 			}
+			i++
 		}
 
 		if len(activities) == 0 {
 			continue
 		}
-		newLastActivityTime := lastActivityTime
-		// Newest activity is at the end of the list so iterate through the list in reverse.
-		for i := len(activities) - 1; i >= 0; i-- {
-			activity := activities[i]
-			if activity.PrimaryActionDetail.Comment != nil {
-				if activity.Timestamp > lastActivityTime {
-					newLastActivityTime = activity.Timestamp
+
+		// We don't want to spam the user with notifications if there are more than 5 activities.
+		if len(activities) > 5 {
+			p.handleMultipleActivitiesNotification(change.File, userID)
+		} else {
+			// Newest activity is at the end of the list so iterate through the list in reverse.
+			for i := len(activities) - 1; i >= 0; i-- {
+				activity := activities[i]
+				if activity.PrimaryActionDetail.Comment != nil {
+					p.handleCommentNotifications(c.Ctx, driveService, change.File, userID, activity)
 				}
-				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
-					continue
+
+				if activity.PrimaryActionDetail.PermissionChange != nil {
+					p.handleFileSharedNotification(change.File, userID)
 				}
-				p.handleCommentNotifications(srv, change.File, userID, activity)
-			}
-			if activity.PrimaryActionDetail.PermissionChange != nil {
-				if activity.Timestamp > lastActivityTime {
-					newLastActivityTime = activity.Timestamp
-				}
-				if len(activity.Actors) > 0 && activity.Actors[0].User != nil && activity.Actors[0].User.KnownUser != nil && activity.Actors[0].User.KnownUser.IsCurrentUser {
-					continue
-				}
-				p.handleFileSharedNotification(change.File, userID)
 			}
 		}
 
-		if newLastActivityTime > lastActivityTime {
-			err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, newLastActivityTime)
-			if err != nil {
-				p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
-			}
+		err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ModifiedTime)
+		if err != nil {
+			p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
 		}
 	}
 
@@ -742,22 +747,15 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	commentID := r.URL.Query().Get("commentID")
 	fileID := r.URL.Query().Get("fileID")
 
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(request.UserId)
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
-	srv, err := drive.NewService(context.Background(), option.WithTokenSource(conf.TokenSource(context.Background(), authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-		return
-	}
-	reply, err := srv.Replies.Create(fileID, commentID, &drive.Reply{
+	reply, err := driveService.CreateReply(c.Ctx, fileID, commentID, &drive.Reply{
 		Content: request.Submission["message"].(string),
-	}).Fields("*").Do()
+	})
 	if err != nil {
 		p.API.LogError("Failed to create comment reply", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -803,25 +801,16 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-	authToken, err := p.getGoogleUserToken(c.UserID)
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
-	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-		return
-	}
-
-	_, err = srv.Files.Create(&drive.File{
+	_, err = driveService.CreateFile(c.Ctx, &drive.File{
 		Name: fileInfo.Name,
-	}).Media(bytes.NewReader(fileReader)).Do()
+	}, fileReader)
 	if err != nil {
 		p.API.LogError("Failed to upload file", "err", err)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -853,19 +842,9 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 		return
 	}
 
-	ctx := context.Background()
-	conf := p.getOAuthConfig()
-
-	authToken, err := p.getGoogleUserToken(c.UserID)
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to get Google user token", "err", err)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
-		return
-	}
-
-	srv, err := drive.NewService(ctx, option.WithTokenSource(conf.TokenSource(ctx, authToken)))
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err)
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -886,9 +865,9 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 			return
 		}
 
-		_, err := srv.Files.Create(&drive.File{
+		_, err = driveService.CreateFile(c.Ctx, &drive.File{
 			Name: fileInfo.Name,
-		}).Media(bytes.NewReader(fileReader)).Do()
+		}, fileReader)
 		if err != nil {
 			p.API.LogError("Failed to upload file", "err", err)
 			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
@@ -918,13 +897,13 @@ func (p *Plugin) initializeAPI() {
 	oauthRouter.HandleFunc("/connect", p.checkAuth(p.attachContext(p.connectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
 	oauthRouter.HandleFunc("/complete", p.checkAuth(p.attachContext(p.completeConnectUserToGoogle), ResponseTypePlain)).Methods(http.MethodGet)
 
-	apiRouter.HandleFunc("/create", p.attachContext(p.handleFileCreation)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/create", p.checkAuth(p.attachContext(p.handleFileCreation), ResponseTypeJSON)).Methods(http.MethodPost)
 
 	apiRouter.HandleFunc("/webhook", p.attachContext(p.handleDriveWatchNotifications)).Methods(http.MethodPost)
 
-	apiRouter.HandleFunc("/reply_dialog", p.attachContext(p.openCommentReplyDialog)).Methods(http.MethodPost)
-	apiRouter.HandleFunc("/reply", p.attachContext(p.handleCommentReplyDialog)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/reply_dialog", p.checkAuth(p.attachContext(p.openCommentReplyDialog), ResponseTypeJSON)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/reply", p.checkAuth(p.attachContext(p.handleCommentReplyDialog), ResponseTypeJSON)).Methods(http.MethodPost)
 
-	apiRouter.HandleFunc("/upload_file", p.attachContext(p.handleFileUpload)).Methods(http.MethodPost)
-	apiRouter.HandleFunc("/upload_all", p.attachContext(p.handleAllFilesUpload)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/upload_file", p.checkAuth(p.attachContext(p.handleFileUpload), ResponseTypeJSON)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/upload_all", p.checkAuth(p.attachContext(p.handleAllFilesUpload), ResponseTypeJSON)).Methods(http.MethodPost)
 }
