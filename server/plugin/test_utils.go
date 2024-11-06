@@ -30,7 +30,6 @@ type TestEnvironment struct {
 }
 
 func SetupTestEnvironment(t *testing.T) *TestEnvironment {
-
 	p := Plugin{
 		BotUserID:   "bot_user_id",
 		oauthBroker: NewOAuthBroker(func(event OAuthCompleteEvent) {}),

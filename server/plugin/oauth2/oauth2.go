@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 	oauth2package "golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 )
 
 type ConfigWrapper struct {
