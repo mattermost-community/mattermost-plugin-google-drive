@@ -12,12 +12,16 @@ import (
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
 
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+
 	mock_pluginapi "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/pluginapi/mocks"
 
 	mock_google "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google/mocks"
 
 	mock_store "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore/mocks"
+
+	mock_oauth2 "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2/mocks"
 )
 
 type TestEnvironment struct {
@@ -26,8 +30,10 @@ type TestEnvironment struct {
 }
 
 func SetupTestEnvironment(t *testing.T) *TestEnvironment {
+
 	p := Plugin{
-		BotUserID: "bot_user_id",
+		BotUserID:   "bot_user_id",
+		oauthBroker: NewOAuthBroker(func(event OAuthCompleteEvent) {}),
 	}
 
 	e := &TestEnvironment{
@@ -46,11 +52,18 @@ func (e *TestEnvironment) Cleanup(t *testing.T) {
 func (e *TestEnvironment) ResetMocks(t *testing.T) {
 	e.mockAPI = &plugintest.API{}
 	e.plugin.SetAPI(e.mockAPI)
-	e.plugin.Client = pluginapi.NewClient(e.plugin.API, e.plugin.Driver)
+	e.plugin.Client = pluginapi.NewClient(e.mockAPI, e.plugin.Driver)
+	e.plugin.configuration = &config.Configuration{
+		QueriesPerMinute:        60,
+		BurstSize:               10,
+		GoogleOAuthClientID:     "randomstring.apps.googleusercontent.com",
+		GoogleOAuthClientSecret: "googleoauthclientsecret",
+		EncryptionKey:           "encryptionkey123",
+	}
 }
 
 // revive:disable-next-line:unexported-return
-func GetMockSetup(t *testing.T) (*mock_store.MockKVStore, *mock_google.MockClientInterface, *mock_google.MockDriveInterface, *mock_google.MockDriveActivityInterface, *mock_google.MockDocsInterface, *mock_google.MockSheetsInterface, *mock_google.MockSlidesInterface, *mock_pluginapi.MockClusterMutex, *mock_pluginapi.MockCluster) {
+func GetMockSetup(t *testing.T) (*mock_store.MockKVStore, *mock_google.MockClientInterface, *mock_google.MockDriveInterface, *mock_google.MockDriveActivityInterface, *mock_google.MockDocsInterface, *mock_google.MockSheetsInterface, *mock_google.MockSlidesInterface, *mock_pluginapi.MockClusterMutex, *mock_pluginapi.MockCluster, *mock_oauth2.MockConfigInterface, *mock_pluginapi.MockTracker) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -63,8 +76,10 @@ func GetMockSetup(t *testing.T) (*mock_store.MockKVStore, *mock_google.MockClien
 	mockGoogleSlides := mock_google.NewMockSlidesInterface(ctrl)
 	mockClusterMutex := mock_pluginapi.NewMockClusterMutex(ctrl)
 	mockCluster := mock_pluginapi.NewMockCluster(ctrl)
+	mockOAuth2 := mock_oauth2.NewMockConfigInterface(ctrl)
+	mockTelemetry := mock_pluginapi.NewMockTracker(ctrl)
 
-	return mockKvStore, mockGoogleClient, mockGoogleDrive, mockDriveActivity, mockGoogleDocs, mockGoogleSheets, mockGoogleSlides, mockClusterMutex, mockCluster
+	return mockKvStore, mockGoogleClient, mockGoogleDrive, mockDriveActivity, mockGoogleDocs, mockGoogleSheets, mockGoogleSlides, mockClusterMutex, mockCluster, mockOAuth2, mockTelemetry
 }
 
 func GetSampleChangeList() *drive.ChangeList {

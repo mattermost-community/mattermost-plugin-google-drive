@@ -1,11 +1,7 @@
 package plugin
 
 import (
-	"fmt"
 	"sync"
-
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 )
 
 type OAuthCompleteEvent struct {
@@ -20,29 +16,6 @@ type OAuthBroker struct {
 	closed            bool
 	oauthCompleteSubs map[string][]chan error
 	mapCreate         sync.Once
-}
-
-func (p *Plugin) getOAuthConfig() *oauth2.Config {
-	config := p.getConfiguration()
-
-	scopes := []string{
-		"https://www.googleapis.com/auth/userinfo.profile",
-		"https://www.googleapis.com/auth/userinfo.email",
-		"https://www.googleapis.com/auth/drive.file",
-		"https://www.googleapis.com/auth/drive.activity",
-		"https://www.googleapis.com/auth/documents",
-		"https://www.googleapis.com/auth/presentations",
-		"https://www.googleapis.com/auth/spreadsheets",
-		"https://www.googleapis.com/auth/drive",
-	}
-
-	return &oauth2.Config{
-		ClientID:     config.GoogleOAuthClientID,
-		ClientSecret: config.GoogleOAuthClientSecret,
-		Scopes:       scopes,
-		RedirectURL:  fmt.Sprintf("%s/plugins/%s/oauth/complete", *p.Client.Configuration.GetConfig().ServiceSettings.SiteURL, Manifest.Id),
-		Endpoint:     google.Endpoint,
-	}
 }
 
 func (ob *OAuthBroker) publishOAuthComplete(userID string, err error, fromCluster bool) {

@@ -16,7 +16,6 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/logger"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
 	"github.com/pkg/errors"
-	"golang.org/x/oauth2"
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
@@ -165,8 +164,6 @@ func (p *Plugin) checkAuth(handler http.HandlerFunc, responseType ResponseType) 
 }
 
 func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.Request) {
-	conf := p.getOAuthConfig()
-
 	state := fmt.Sprintf("%v_%v", mattermostModel.NewId()[0:15], c.UserID)
 
 	if err := p.KVStore.StoreOAuthStateToken(state, state); err != nil {
@@ -175,7 +172,7 @@ func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	url := conf.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent"))
+	url := p.oauthConfig.AuthCodeURL(state)
 
 	ch := p.oauthBroker.SubscribeOAuthComplete(c.UserID)
 
@@ -217,8 +214,6 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 
 	config := p.getConfiguration()
 
-	conf := p.getOAuthConfig()
-
 	code := r.URL.Query().Get("code")
 	if len(code) == 0 {
 		rErr = errors.New("missing authorization code")
@@ -227,6 +222,11 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	}
 
 	state := r.URL.Query().Get("state")
+	if len(state) == 0 {
+		rErr = errors.New("missing state")
+		http.Error(w, rErr.Error(), http.StatusBadRequest)
+		return
+	}
 
 	storedState, err := p.KVStore.GetOAuthStateToken(state)
 	if err != nil {
@@ -259,7 +259,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 		return
 	}
 
-	token, err := conf.Exchange(c.Ctx, code)
+	token, err := p.oauthConfig.Exchange(c.Ctx, code)
 	if err != nil {
 		c.Log.WithError(err).Warnf("Can't exchange state")
 

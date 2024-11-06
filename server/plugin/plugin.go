@@ -19,6 +19,7 @@ import (
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
@@ -49,6 +50,7 @@ type Plugin struct {
 	FlowManager *FlowManager
 
 	oauthBroker *OAuthBroker
+	oauthConfig oauth2.Config
 
 	channelRefreshJob *cluster.Job
 
@@ -172,7 +174,9 @@ func (p *Plugin) OnActivate() error {
 		return errors.Wrap(err, "failed to create a scheduled recurring job to refresh watch channels")
 	}
 
-	p.GoogleClient = google.NewGoogleClient(p.getOAuthConfig(), p.getConfiguration(), p.KVStore, p.API)
+	p.oauthConfig = oauth2.GetOAuthConfig(p.getConfiguration(), siteURL, Manifest.Id)
+
+	p.GoogleClient = google.NewGoogleClient(p.oauthConfig, p.getConfiguration(), p.KVStore, p.API)
 	return nil
 }
 

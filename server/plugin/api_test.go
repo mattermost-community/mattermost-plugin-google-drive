@@ -10,10 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	mattermostModel "github.com/mattermost/mattermost/server/public/model"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
@@ -26,7 +29,7 @@ import (
 )
 
 func TestNotificationWebhook(t *testing.T) {
-	mockKvStore, mockGoogleClient, mockGoogleDrive, mockDriveActivity, _, _, _, _, mockCluster := GetMockSetup(t)
+	mockKvStore, mockGoogleClient, mockGoogleDrive, mockDriveActivity, _, _, _, _, mockCluster, _, _ := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -365,7 +368,7 @@ func TestNotificationWebhook(t *testing.T) {
 }
 
 func TestFileCreationEndpoint(t *testing.T) {
-	mockKvStore, mockGoogleClient, mockGoogleDrive, _, mockGoogleDocs, mockGoogleSheets, mockGoogleSlides, _, _ := GetMockSetup(t)
+	mockKvStore, mockGoogleClient, mockGoogleDrive, _, mockGoogleDocs, mockGoogleSheets, mockGoogleSlides, _, _, _, _ := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -646,7 +649,7 @@ func TestFileCreationEndpoint(t *testing.T) {
 }
 
 func TestUploadFile(t *testing.T) {
-	mockKvStore, mockGoogleClient, mockGoogleDrive, _, _, _, _, _, _ := GetMockSetup(t)
+	mockKvStore, mockGoogleClient, mockGoogleDrive, _, _, _, _, _, _, _, _ := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -725,7 +728,7 @@ func TestUploadFile(t *testing.T) {
 }
 
 func TestUploadMultipleFiles(t *testing.T) {
-	mockKvStore, mockGoogleClient, mockGoogleDrive, _, _, _, _, _, _ := GetMockSetup(t)
+	mockKvStore, mockGoogleClient, mockGoogleDrive, _, _, _, _, _, _, _, _ := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -794,6 +797,105 @@ func TestUploadMultipleFiles(t *testing.T) {
 
 			test.envSetup(ctx.Ctx, te)
 			te.plugin.handleAllFilesUpload(ctx, w, r)
+
+			result := w.Result()
+			require.NotNil(t, result)
+			defer result.Body.Close()
+			assert.Equal(test.expectedStatusCode, result.StatusCode)
+		})
+	}
+}
+
+func TestCompleteConnectUserToGoogle(t *testing.T) {
+	mockKvStore, mockGoogleClient, _, _, _, _, _, _, _, mockOAuth2, mockTelemetry := GetMockSetup(t)
+
+	for name, test := range map[string]struct {
+		expectedStatusCode int
+		envSetup           func(ctx context.Context, te *TestEnvironment)
+		modifyRequest      func(*http.Request) *http.Request
+	}{
+		"No code in URL query": {
+			expectedStatusCode: http.StatusBadRequest,
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+			},
+			modifyRequest: func(r *http.Request) *http.Request {
+				values := r.URL.Query()
+				values.Del("code")
+				r.URL.RawQuery = values.Encode()
+				return r
+			},
+		},
+		"No state in URL query": {
+			expectedStatusCode: http.StatusBadRequest,
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+			},
+			modifyRequest: func(r *http.Request) *http.Request {
+				values := r.URL.Query()
+				values.Del("state")
+				r.URL.RawQuery = values.Encode()
+				return r
+			},
+		},
+		"State token does not match stored token": {
+			expectedStatusCode: http.StatusBadRequest,
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				mockKvStore.EXPECT().GetOAuthStateToken("oauthstate_userId1").Return([]byte("randomState"), nil)
+				mockKvStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId1").Return(nil)
+			},
+		},
+		"State token does not contain the correct userID": {
+			expectedStatusCode: http.StatusUnauthorized,
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				mockKvStore.EXPECT().GetOAuthStateToken("oauthstate_userId123").Return([]byte("oauthstate_userId123"), nil)
+				mockKvStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId123").Return(nil)
+			},
+			modifyRequest: func(r *http.Request) *http.Request {
+				values := r.URL.Query()
+				values.Set("state", "oauthstate_userId123")
+				values.Set("code", "oauthcode")
+				r.URL.RawQuery = values.Encode()
+				return r
+			},
+		},
+		"Success complete oauth setup": {
+			expectedStatusCode: http.StatusOK,
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				mockKvStore.EXPECT().GetOAuthStateToken("oauthstate_userId1").Return([]byte("oauthstate_userId1"), nil)
+				mockKvStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId1").Return(nil)
+				mockOAuth2.EXPECT().Exchange(ctx, "oauthcode").Return(&oauth2.Token{
+					AccessToken: "accessToken12345",
+					TokenType:   "Bearer",
+					Expiry:      time.Now().Add(time.Hour),
+				}, nil)
+				mockKvStore.EXPECT().StoreGoogleUserToken("userId1", gomock.Any()).Return(nil)
+				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
+				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
+				mockTelemetry.EXPECT().TrackUserEvent("account_connected", "userId1", nil)
+				te.mockAPI.On("PublishWebSocketEvent", "google_connect", map[string]interface{}{"connected": true, "google_client_id": "randomstring.apps.googleusercontent.com"}, &mattermostModel.WebsocketBroadcast{OmitUsers: map[string]bool(nil), UserId: "userId1", ChannelId: "", TeamId: "", ConnectionId: "", OmitConnectionId: "", ContainsSanitizedData: false, ContainsSensitiveData: false, ReliableClusterSend: false, BroadcastHooks: []string(nil), BroadcastHookArgs: []map[string]interface{}(nil)}).Times(1)
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			te := SetupTestEnvironment(t)
+			defer te.Cleanup(t)
+
+			te.plugin.KVStore = mockKvStore
+			te.plugin.GoogleClient = mockGoogleClient
+			te.plugin.oauthConfig = mockOAuth2
+			te.plugin.tracker = mockTelemetry
+			te.plugin.initializeAPI()
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/complete?code=oauthcode&state=oauthstate_userId1", nil)
+			r.Header.Set("Mattermost-User-ID", "userId1")
+			ctx, _ := te.plugin.createContext(w, r)
+			if test.modifyRequest != nil {
+				r = test.modifyRequest(r)
+			}
+
+			test.envSetup(ctx.Ctx, te)
+			te.plugin.completeConnectUserToGoogle(ctx, w, r)
 
 			result := w.Result()
 			require.NotNil(t, result)

@@ -6,7 +6,7 @@ import (
 	"errors"
 
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"golang.org/x/oauth2"
+	oauth2package "golang.org/x/oauth2"
 	"golang.org/x/time/rate"
 	"google.golang.org/api/docs/v1"
 	driveV2 "google.golang.org/api/drive/v2"
@@ -20,11 +20,12 @@ import (
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 type Client struct {
-	oauthConfig  *oauth2.Config
+	oauthConfig  oauth2.Config
 	config       *config.Configuration
 	kvstore      kvstore.KVStore
 	papi         plugin.API
@@ -47,7 +48,7 @@ const (
 	driveActivityServiceType = "driveactivity"
 )
 
-func NewGoogleClient(oauthConfig *oauth2.Config, config *config.Configuration, kvstore kvstore.KVStore, papi plugin.API) ClientInterface {
+func NewGoogleClient(oauthConfig oauth2.Config, config *config.Configuration, kvstore kvstore.KVStore, papi plugin.API) ClientInterface {
 	maximumQueriesPerSecond := config.QueriesPerMinute / 60
 	burstSize := config.BurstSize
 
@@ -238,7 +239,7 @@ func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (Dr
 	}, nil
 }
 
-func (g *Client) GetGoogleUserToken(userID string) (*oauth2.Token, error) {
+func (g *Client) GetGoogleUserToken(userID string) (*oauth2package.Token, error) {
 	encryptedToken, err := g.kvstore.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
@@ -253,7 +254,7 @@ func (g *Client) GetGoogleUserToken(userID string) (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	var oauthToken oauth2.Token
+	var oauthToken oauth2package.Token
 	err = json.Unmarshal([]byte(decryptedToken), &oauthToken)
 
 	return &oauthToken, err
