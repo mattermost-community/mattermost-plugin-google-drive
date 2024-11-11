@@ -85,7 +85,7 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 		{
 			users := p.getAllChannelUsers(channelID)
 			for _, user := range users {
-				if !user.IsBot {
+				if !user.IsBot && user.Id != userID {
 					permissions = append(permissions, &drive.Permission{
 						Role:         "reader",
 						EmailAddress: user.Email,
@@ -99,7 +99,7 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 		{
 			users := p.getAllChannelUsers(channelID)
 			for _, user := range users {
-				if !user.IsBot {
+				if !user.IsBot && user.Id != userID {
 					permissions = append(permissions, &drive.Permission{
 						Role:         "commenter",
 						EmailAddress: user.Email,
@@ -113,7 +113,7 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 		{
 			users := p.getAllChannelUsers(channelID)
 			for _, user := range users {
-				if !user.IsBot {
+				if !user.IsBot && user.Id != userID {
 					permissions = append(permissions, &drive.Permission{
 						Role:         "writer",
 						EmailAddress: user.Email,
