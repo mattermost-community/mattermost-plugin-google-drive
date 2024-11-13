@@ -131,19 +131,19 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 		return errors.Wrap(err, "failed to create Google Drive service")
 	}
 
-	usersWithoutAccesss := []string{}
+	usersWithoutAccess := []string{}
 	config := p.API.GetConfig()
 	var permissionError error
 
 	for i, permission := range permissions {
 		// Continue through the permissions loop when we encounter an error so we can inform the user who wasn't granted access.
 		if permissionError != nil || i > 60 {
-			usersWithoutAccesss = appendUsersWithoutAccessSlice(config, usersWithoutAccesss, userMap[permission.EmailAddress].Username, permission.EmailAddress)
+			usersWithoutAccess = appendUsersWithoutAccessSlice(config, usersWithoutAccess, userMap[permission.EmailAddress].Username, permission.EmailAddress)
 			continue
 		}
 		_, err := driveService.CreatePermission(ctx, fileID, permission)
 		if err != nil {
-			usersWithoutAccesss = appendUsersWithoutAccessSlice(config, usersWithoutAccesss, userMap[permission.EmailAddress].Username, permission.EmailAddress)
+			usersWithoutAccess = appendUsersWithoutAccessSlice(config, usersWithoutAccess, userMap[permission.EmailAddress].Username, permission.EmailAddress)
 			// This error will occur if the user is not allowed to share the file with someone outside their domain.
 			if strings.Contains(err.Error(), "shareOutNotPermitted") {
 				continue
@@ -152,21 +152,21 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 		}
 	}
 
-	if len(usersWithoutAccesss) > 0 {
-		p.createBotDMPost(userID, fmt.Sprintf("Failed to share file, \"%s\", with the following users: %s", fileName, strings.Join(usersWithoutAccesss, ", ")), nil)
+	if len(usersWithoutAccess) > 0 {
+		p.createBotDMPost(userID, fmt.Sprintf("Failed to share file, \"%s\", with the following users: %s", fileName, strings.Join(usersWithoutAccess, ", ")), nil)
 	}
 
 	return permissionError
 }
 
-func appendUsersWithoutAccessSlice(config *model.Config, usersWithoutAccesss []string, username string, email string) []string {
+func appendUsersWithoutAccessSlice(config *model.Config, usersWithoutAccess []string, username string, email string) []string {
 	if config.PrivacySettings.ShowEmailAddress == nil || !*config.PrivacySettings.ShowEmailAddress {
-		usersWithoutAccesss = append(usersWithoutAccesss, "@"+username)
+		usersWithoutAccess = append(usersWithoutAccess, "@"+username)
 	} else {
-		usersWithoutAccesss = append(usersWithoutAccesss, email)
+		usersWithoutAccess = append(usersWithoutAccess, email)
 	}
 
-	return usersWithoutAccesss
+	return usersWithoutAccess
 }
 
 func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
