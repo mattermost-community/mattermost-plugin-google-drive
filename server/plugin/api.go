@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	url2 "net/url"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -601,7 +601,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 
 		driveActivityQuery := &driveactivity.QueryDriveActivityRequest{
-			ItemName: fmt.Sprintf("items/%s", url2.PathEscape(change.FileId)),
+			ItemName: fmt.Sprintf("items/%s", url.PathEscape(change.FileId)),
 		}
 
 		lastActivityTime, err := p.KVStore.GetLastActivityForFile(userID, change.FileId)
@@ -701,14 +701,14 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 
 	commentID := request.Context["commentID"].(string)
 	fileID := request.Context["fileID"].(string)
-	url := fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s",
-		url2.PathEscape(*p.API.GetConfig().ServiceSettings.SiteURL),
-		url2.PathEscape(Manifest.Id),
-		url2.QueryEscape(fileID),
-		url2.QueryEscape(commentID))
+	urlStr := fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s",
+		url.PathEscape(*p.API.GetConfig().ServiceSettings.SiteURL),
+		url.PathEscape(Manifest.Id),
+		url.QueryEscape(fileID),
+		url.QueryEscape(commentID))
 	dialog := mattermostModel.OpenDialogRequest{
 		TriggerId: request.TriggerId,
-		URL:       url,
+		URL:       urlStr,
 		Dialog: mattermostModel.Dialog{
 			CallbackId:     "reply",
 			Title:          "Reply to comment",
