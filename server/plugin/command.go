@@ -101,7 +101,7 @@ func parseCommand(input string) (command, action string, parameters []string) {
 			}
 
 			// ignore successive whitespaces that are outside of double quotes
-			if len(current) == 0 && !inQuotes {
+			if len(current) == 0 {
 				continue
 			}
 
