@@ -37,7 +37,7 @@ func (p *Plugin) getOAuthConfig() *oauth2.Config {
 		"https://www.googleapis.com/auth/drive",
 	}
 
-	redirectUrl := fmt.Sprintf("%s/plugins/%s/oauth/complete",
+	redirectURL := fmt.Sprintf("%s/plugins/%s/oauth/complete",
 		url.PathEscape(*p.Client.Configuration.GetConfig().ServiceSettings.SiteURL),
 		url.PathEscape(Manifest.Id))
 
@@ -45,7 +45,7 @@ func (p *Plugin) getOAuthConfig() *oauth2.Config {
 		ClientID:     config.GoogleOAuthClientID,
 		ClientSecret: config.GoogleOAuthClientSecret,
 		Scopes:       scopes,
-		RedirectURL:  redirectUrl,
+		RedirectURL:  redirectURL,
 		Endpoint:     google.Endpoint,
 	}
 }
