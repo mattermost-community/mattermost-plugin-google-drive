@@ -2,7 +2,7 @@ package plugin
 
 import (
 	"fmt"
-	url2 "net/url"
+	"net/url"
 	"strings"
 	"unicode"
 
@@ -94,7 +94,7 @@ func parseCommand(input string) (command, action string, parameters []string) {
 
 	for _, char := range input {
 		if unicode.IsSpace(char) {
-			// keep whitespaces that are inside double qoutes
+			// keep whitespaces that are inside double quotes
 			if inQuotes {
 				current += " "
 				continue
@@ -188,7 +188,7 @@ func (p *Plugin) handleConnect(c *plugin.Context, args *model.CommandArgs, param
 
 	return fmt.Sprintf("[Click here to link your Google account.](%s/plugins/%s/oauth/connect)",
 		*siteURL,
-		url2.PathEscape(Manifest.Id))
+		url.PathEscape(Manifest.Id))
 }
 
 func (p *Plugin) handleDisconnect(c *plugin.Context, args *model.CommandArgs, _ []string) string {
