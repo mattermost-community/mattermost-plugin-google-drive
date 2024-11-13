@@ -227,7 +227,10 @@ func (p *Plugin) startDriveWatchChannel(userID string) error {
 		return err
 	}
 
-	url, err := url.Parse(fmt.Sprintf("%s/plugins/%s/api/v1/webhook", *p.Client.Configuration.GetConfig().ServiceSettings.SiteURL, Manifest.Id))
+	urlStr := fmt.Sprintf("%s/plugins/%s/api/v1/webhook",
+		*p.Client.Configuration.GetConfig().ServiceSettings.SiteURL,
+		url.PathEscape(Manifest.Id))
+	url, err := url.Parse(urlStr)
 	if err != nil {
 		p.API.LogError("Failed to parse webhook url", "err", err)
 		return err

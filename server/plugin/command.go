@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"unicode"
 
@@ -93,14 +94,14 @@ func parseCommand(input string) (command, action string, parameters []string) {
 
 	for _, char := range input {
 		if unicode.IsSpace(char) {
-			// keep whitespaces that are inside double qoutes
+			// keep whitespaces that are inside double quotes
 			if inQuotes {
 				current += " "
 				continue
 			}
 
 			// ignore successive whitespaces that are outside of double quotes
-			if len(current) == 0 && !inQuotes {
+			if len(current) == 0 {
 				continue
 			}
 
@@ -185,7 +186,9 @@ func (p *Plugin) handleConnect(c *plugin.Context, args *model.CommandArgs, param
 		return "Encountered an error connecting to Google Drive."
 	}
 
-	return fmt.Sprintf("[Click here to link your Google account.](%s/plugins/%s/oauth/connect)", *siteURL, Manifest.Id)
+	return fmt.Sprintf("[Click here to link your Google account.](%s/plugins/%s/oauth/connect)",
+		*siteURL,
+		url.PathEscape(Manifest.Id))
 }
 
 func (p *Plugin) handleDisconnect(c *plugin.Context, args *model.CommandArgs, _ []string) string {

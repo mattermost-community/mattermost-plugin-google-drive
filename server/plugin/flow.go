@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -307,7 +308,9 @@ func (fm *FlowManager) submitOAuthConfig(f *flow.Flow, submitted map[string]inte
 
 func (fm *FlowManager) stepOAuthConnect() flow.Step {
 	connectPretext := "##### :white_check_mark: Connect your Google account"
-	connectURL := fmt.Sprintf("%s/plugins/%s/oauth/connect", *fm.client.Configuration.GetConfig().ServiceSettings.SiteURL, Manifest.Id)
+	connectURL := fmt.Sprintf("%s/plugins/%s/oauth/connect",
+		*fm.client.Configuration.GetConfig().ServiceSettings.SiteURL,
+		url.PathEscape(Manifest.Id))
 	connectText := fmt.Sprintf("Go [here](%s) to connect your account.", connectURL)
 	return flow.NewStep(stepOAuthConnect).
 		WithText(connectText).
