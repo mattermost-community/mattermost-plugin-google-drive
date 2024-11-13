@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+	url2 "net/url"
 	"strings"
 	"unicode"
 
@@ -185,7 +186,9 @@ func (p *Plugin) handleConnect(c *plugin.Context, args *model.CommandArgs, param
 		return "Encountered an error connecting to Google Drive."
 	}
 
-	return fmt.Sprintf("[Click here to link your Google account.](%s/plugins/%s/oauth/connect)", *siteURL, Manifest.Id)
+	return fmt.Sprintf("[Click here to link your Google account.](%s/plugins/%s/oauth/connect)",
+		*siteURL,
+		url2.PathEscape(Manifest.Id))
 }
 
 func (p *Plugin) handleDisconnect(c *plugin.Context, args *model.CommandArgs, _ []string) string {

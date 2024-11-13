@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -143,7 +144,7 @@ func (p *Plugin) handleFilePermissions(ctx context.Context, userID string, fileI
 		_, err := driveService.CreatePermission(ctx, fileID, permission)
 		if err != nil {
 			usersWithoutAccesss = appendUsersWithoutAccessSlice(config, usersWithoutAccesss, userMap[permission.EmailAddress].Username, permission.EmailAddress)
-			// This error will occur if the user is not allowed to share the file with someone outside of their domain.
+			// This error will occur if the user is not allowed to share the file with someone outside their domain.
 			if strings.Contains(err.Error(), "shareOutNotPermitted") {
 				continue
 			}
@@ -176,9 +177,12 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 		return fmt.Sprintf("%s is not a valid create option", subcommand)
 	}
 
+	urlStr := fmt.Sprintf("/plugins/%s/api/v1/create?type=%s",
+		url.PathEscape(Manifest.Id),
+		url.QueryEscape(subcommand))
 	dialog := model.OpenDialogRequest{
 		TriggerId: args.TriggerId,
-		URL:       fmt.Sprintf("/plugins/%s/api/v1/create?type=%s", Manifest.Id, subcommand),
+		URL:       urlStr,
 		Dialog: model.Dialog{
 			CallbackId:     fmt.Sprintf("create_%s", subcommand),
 			Title:          fmt.Sprintf("Create a Google %s", cases.Title(language.English, cases.NoLower).String(subcommand)),

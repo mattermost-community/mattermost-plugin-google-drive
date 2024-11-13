@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	url2 "net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -63,7 +64,7 @@ func (e *APIErrorResponse) Error() string {
 	return e.Message
 }
 
-// This is an error response used in interactive dialogs
+// DialogErrorResponse is an error response used in interactive dialogs
 type DialogErrorResponse struct {
 	Error      string `json:"error"`
 	StatusCode int    `json:"status_code"`
@@ -551,7 +552,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 		err = p.KVStore.StoreWatchChannelData(userID, *watchChannelData)
 		if err != nil {
-			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err, "userID", userID)
+			p.API.LogError("Database error occurred while trying to save watch channel data", "err", err, "userID", userID)
 			return
 		}
 	}()
@@ -600,7 +601,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 
 		driveActivityQuery := &driveactivity.QueryDriveActivityRequest{
-			ItemName: fmt.Sprintf("items/%s", change.FileId),
+			ItemName: fmt.Sprintf("items/%s", url2.PathEscape(change.FileId)),
 		}
 
 		lastActivityTime, err := p.KVStore.GetLastActivityForFile(userID, change.FileId)
@@ -700,9 +701,14 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 
 	commentID := request.Context["commentID"].(string)
 	fileID := request.Context["fileID"].(string)
+	url := fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s",
+		url2.PathEscape(*p.API.GetConfig().ServiceSettings.SiteURL),
+		url2.PathEscape(Manifest.Id),
+		url2.QueryEscape(fileID),
+		url2.QueryEscape(commentID))
 	dialog := mattermostModel.OpenDialogRequest{
 		TriggerId: request.TriggerId,
-		URL:       fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id, fileID, commentID),
+		URL:       url,
 		Dialog: mattermostModel.Dialog{
 			CallbackId:     "reply",
 			Title:          "Reply to comment",
