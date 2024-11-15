@@ -584,19 +584,22 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			p.API.LogError("Failed to parse last change time", "err", err, "userID", userID, "lastChangeTime", change.Time)
 			continue
 		}
-		viewedByMeTime, err := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
-		if err != nil {
-			p.API.LogError("Failed to parse viewed by me time", "err", err, "userID", userID, "viewedByMeTime", change.File.ViewedByMeTime)
-			continue
-		}
-
-		// Check if the user has already opened the file after the last change.
-		if lastChangeTime.Sub(modifiedTime) >= lastChangeTime.Sub(viewedByMeTime) {
-			err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ViewedByMeTime)
+		if change.File.ViewedByMeTime != "" {
+			var viewedByMeTime time.Time
+			viewedByMeTime, err = time.Parse(time.RFC3339, change.File.ViewedByMeTime)
 			if err != nil {
-				p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
+				p.API.LogError("Failed to parse viewed by me time", "err", err, "userID", userID, "viewedByMeTime", change.File.ViewedByMeTime)
+				continue
 			}
-			continue
+
+			// Check if the user has already opened the file after the last change.
+			if lastChangeTime.Sub(modifiedTime) >= lastChangeTime.Sub(viewedByMeTime) {
+				err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ViewedByMeTime)
+				if err != nil {
+					p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
+				}
+				continue
+			}
 		}
 
 		driveActivityQuery := &driveactivity.QueryDriveActivityRequest{

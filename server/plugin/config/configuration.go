@@ -55,6 +55,16 @@ func (c *Configuration) SetDefaults() (bool, error) {
 		changed = true
 	}
 
+	if c.QueriesPerMinute == 0 {
+		c.QueriesPerMinute = 12000
+		changed = true
+	}
+
+	if c.BurstSize == 0 {
+		c.BurstSize = 1000
+		changed = true
+	}
+
 	return changed, nil
 }
 
