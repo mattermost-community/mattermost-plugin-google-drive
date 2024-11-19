@@ -186,7 +186,7 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 		Dialog: model.Dialog{
 			CallbackId:     fmt.Sprintf("create_%s", subcommand),
 			Title:          fmt.Sprintf("Create a Google %s", cases.Title(language.English, cases.NoLower).String(subcommand)),
-			IconURL:        "http://www.mattermost.org/wp-content/uploads/2016/04/icon.png",
+			IconURL:        "https://www.mattermost.org/wp-content/uploads/2016/04/icon.png",
 			Elements:       []model.DialogElement{},
 			SubmitLabel:    "Create",
 			NotifyOnCancel: false,
