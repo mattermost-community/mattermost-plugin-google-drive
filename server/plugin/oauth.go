@@ -38,7 +38,7 @@ func (p *Plugin) getOAuthConfig() *oauth2.Config {
 	}
 
 	redirectURL := fmt.Sprintf("%s/plugins/%s/oauth/complete",
-		url.PathEscape(*p.Client.Configuration.GetConfig().ServiceSettings.SiteURL),
+		*p.Client.Configuration.GetConfig().ServiceSettings.SiteURL,
 		url.PathEscape(Manifest.Id))
 
 	return &oauth2.Config{
