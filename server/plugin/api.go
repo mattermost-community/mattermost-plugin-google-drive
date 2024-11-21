@@ -702,7 +702,7 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 	commentID := request.Context["commentID"].(string)
 	fileID := request.Context["fileID"].(string)
 	urlStr := fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s",
-		url.PathEscape(*p.API.GetConfig().ServiceSettings.SiteURL),
+		*p.API.GetConfig().ServiceSettings.SiteURL,
 		url.PathEscape(Manifest.Id),
 		url.QueryEscape(fileID),
 		url.QueryEscape(commentID))
