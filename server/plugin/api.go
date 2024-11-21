@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -62,7 +63,7 @@ func (e *APIErrorResponse) Error() string {
 	return e.Message
 }
 
-// This is an error response used in interactive dialogs
+// DialogErrorResponse is an error response used in interactive dialogs
 type DialogErrorResponse struct {
 	Error      string `json:"error"`
 	StatusCode int    `json:"status_code"`
@@ -545,7 +546,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 		err = p.KVStore.StoreWatchChannelData(userID, *watchChannelData)
 		if err != nil {
-			p.API.LogError("Database error occureed while trying to save watch channel data", "err", err, "userID", userID)
+			p.API.LogError("Database error occurred while trying to save watch channel data", "err", err, "userID", userID)
 			return
 		}
 	}()
@@ -578,23 +579,26 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			p.API.LogError("Failed to parse last change time", "err", err, "userID", userID, "lastChangeTime", change.Time)
 			continue
 		}
-		viewedByMeTime, err := time.Parse(time.RFC3339, change.File.ViewedByMeTime)
-		if err != nil {
-			p.API.LogError("Failed to parse viewed by me time", "err", err, "userID", userID, "viewedByMeTime", change.File.ViewedByMeTime)
-			continue
-		}
-
-		// Check if the user has already opened the file after the last change.
-		if lastChangeTime.Sub(modifiedTime) >= lastChangeTime.Sub(viewedByMeTime) {
-			err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ViewedByMeTime)
+		if change.File.ViewedByMeTime != "" {
+			var viewedByMeTime time.Time
+			viewedByMeTime, err = time.Parse(time.RFC3339, change.File.ViewedByMeTime)
 			if err != nil {
-				p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
+				p.API.LogError("Failed to parse viewed by me time", "err", err, "userID", userID, "viewedByMeTime", change.File.ViewedByMeTime)
+				continue
 			}
-			continue
+
+			// Check if the user has already opened the file after the last change.
+			if lastChangeTime.Sub(modifiedTime) >= lastChangeTime.Sub(viewedByMeTime) {
+				err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ViewedByMeTime)
+				if err != nil {
+					p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
+				}
+				continue
+			}
 		}
 
 		driveActivityQuery := &driveactivity.QueryDriveActivityRequest{
-			ItemName: fmt.Sprintf("items/%s", change.FileId),
+			ItemName: fmt.Sprintf("items/%s", url.PathEscape(change.FileId)),
 		}
 
 		lastActivityTime, err := p.KVStore.GetLastActivityForFile(userID, change.FileId)
@@ -705,9 +709,14 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 		return
 	}
 
+	urlStr := fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s",
+		*p.API.GetConfig().ServiceSettings.SiteURL,
+		url.PathEscape(Manifest.Id),
+		url.QueryEscape(fileID),
+		url.QueryEscape(commentID))
 	dialog := mattermostModel.OpenDialogRequest{
 		TriggerId: request.TriggerId,
-		URL:       fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s", *p.API.GetConfig().ServiceSettings.SiteURL, Manifest.Id, fileID, commentID),
+		URL:       urlStr,
 		Dialog: mattermostModel.Dialog{
 			CallbackId:     "reply",
 			Title:          "Reply to comment",

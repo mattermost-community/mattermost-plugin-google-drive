@@ -3,6 +3,7 @@ package oauth2
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	oauth2package "golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -26,12 +27,16 @@ func GetOAuthConfig(config *config.Configuration, siteURL *string, manifestID st
 		"https://www.googleapis.com/auth/drive",
 	}
 
+	redirectURL := fmt.Sprintf("%s/plugins/%s/oauth/complete",
+		*siteURL,
+		url.PathEscape(manifestID))
+
 	return &ConfigWrapper{
 		oauth2Config: &oauth2package.Config{
 			ClientID:     config.GoogleOAuthClientID,
 			ClientSecret: config.GoogleOAuthClientSecret,
 			Scopes:       scopes,
-			RedirectURL:  fmt.Sprintf("%s/plugins/%s/oauth/complete", *siteURL, manifestID),
+			RedirectURL:  redirectURL,
 			Endpoint:     google.Endpoint,
 		},
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// configuration captures the plugin's external configuration as exposed in the Mattermost server
+// Configuration captures the plugin's external configuration as exposed in the Mattermost server
 // configuration, as well as values computed from the configuration. Any public fields will be
 // deserialized from the Mattermost server configuration in OnConfigurationChange.
 //
@@ -52,6 +52,16 @@ func (c *Configuration) SetDefaults() (bool, error) {
 		}
 
 		c.EncryptionKey = secret
+		changed = true
+	}
+
+	if c.QueriesPerMinute == 0 {
+		c.QueriesPerMinute = 12000
+		changed = true
+	}
+
+	if c.BurstSize == 0 {
+		c.BurstSize = 1000
 		changed = true
 	}
 
