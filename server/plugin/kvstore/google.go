@@ -137,8 +137,8 @@ func (kv Impl) DeleteOAuthStateToken(key string) error {
 	return nil
 }
 
-func (kv Impl) StoreGoogleUserToken(userID string, encryptedToken string) error {
-	saved, err := kv.client.KV.Set(getUserTokenKey(userID), []byte(encryptedToken))
+func (kv Impl) StoreGoogleUserToken(userID string, encryptedToken []byte) error {
+	saved, err := kv.client.KV.Set(getUserTokenKey(userID), encryptedToken)
 	if !saved && err != nil {
 		return errors.Wrap(err, "database error occurred when trying to save Google user token")
 	} else if !saved && err == nil {

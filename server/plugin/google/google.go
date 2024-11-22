@@ -249,13 +249,13 @@ func (g *Client) GetGoogleUserToken(userID string) (*oauth2package.Token, error)
 		return nil, nil
 	}
 
-	decryptedToken, err := utils.Decrypt([]byte(g.config.EncryptionKey), string(encryptedToken))
+	decryptedToken, err := utils.Decrypt([]byte(g.config.EncryptionKey), encryptedToken)
 	if err != nil {
 		return nil, err
 	}
 
 	var oauthToken oauth2package.Token
-	err = json.Unmarshal([]byte(decryptedToken), &oauthToken)
+	err = json.Unmarshal(decryptedToken, &oauthToken)
 
 	return &oauthToken, err
 }

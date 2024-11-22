@@ -276,7 +276,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 		return
 	}
 
-	encryptedToken, err := utils.Encrypt([]byte(config.EncryptionKey), string(jsonToken))
+	encryptedToken, err := utils.Encrypt([]byte(config.EncryptionKey), jsonToken)
 	if err != nil {
 		c.Log.WithError(err).Warnf("Failed to encrypt token")
 		http.Error(w, errors.Wrap(err, "Failed to encrypt token").Error(), http.StatusInternalServerError)
