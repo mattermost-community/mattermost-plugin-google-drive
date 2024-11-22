@@ -29,7 +29,7 @@ import (
 )
 
 func TestNotificationWebhook(t *testing.T) {
-	mockKvStore, mockGoogleClient, mockGoogleDrive, mockDriveActivity, _, _, _, _, mockCluster, _, _ := GetMockSetup(t)
+	mocks := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -47,7 +47,7 @@ func TestNotificationWebhook(t *testing.T) {
 					Token:      "",
 					PageToken:  "",
 				}
-				mockKvStore.EXPECT().GetWatchChannelData("").Return(watchChannelData, nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("").Return(watchChannelData, nil)
 				te.mockAPI.On("LogError", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).Maybe()
 			},
 			modifyRequest: func(r *http.Request) *http.Request {
@@ -59,7 +59,7 @@ func TestNotificationWebhook(t *testing.T) {
 			expectedStatusCode: http.StatusBadRequest,
 			envSetup: func(te *TestEnvironment) {
 				watchChannelData := GetSampleWatchChannelData()
-				mockKvStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil)
 				te.mockAPI.On("LogError", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).Maybe()
 			},
 			modifyRequest: func(r *http.Request) *http.Request {
@@ -78,14 +78,14 @@ func TestNotificationWebhook(t *testing.T) {
 					Token:      "token1",
 					PageToken:  "",
 				}
-				mockKvStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
-				mockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mockGoogleDrive, nil)
-				mockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
+				mocks.MockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
 				te.mockAPI.On("KVSetWithOptions", "mutex_drive_watch_notifications_userId1", mock.Anything, mock.Anything).Return(true, nil)
-				mockGoogleDrive.EXPECT().GetStartPageToken(context.Background()).Return(&drive.StartPageToken{
+				mocks.MockGoogleDrive.EXPECT().GetStartPageToken(context.Background()).Return(&drive.StartPageToken{
 					StartPageToken: "newPageToken1",
 				}, nil)
-				mockGoogleDrive.EXPECT().ChangesList(context.Background(), "newPageToken1").Return(&drive.ChangeList{NewStartPageToken: "newPageToken2"}, nil)
+				mocks.MockGoogleDrive.EXPECT().ChangesList(context.Background(), "newPageToken1").Return(&drive.ChangeList{NewStartPageToken: "newPageToken2"}, nil)
 				newWatchChannelData := &model.WatchChannelData{
 					ChannelID:  "channelId1",
 					ResourceID: "resourceId1",
@@ -94,32 +94,32 @@ func TestNotificationWebhook(t *testing.T) {
 					Token:      "token1",
 					PageToken:  "newPageToken2",
 				}
-				mockKvStore.EXPECT().StoreWatchChannelData("userId1", *newWatchChannelData).Return(nil)
+				mocks.MockKVStore.EXPECT().StoreWatchChannelData("userId1", *newWatchChannelData).Return(nil)
 			},
 		},
 		"Ensure we only hit the changelist a maximum of 5 times": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
 				watchChannelData := GetSampleWatchChannelData()
-				mockKvStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
-				mockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mockGoogleDrive, nil)
-				mockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
+				mocks.MockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
 				te.mockAPI.On("KVSetWithOptions", "mutex_drive_watch_notifications_userId1", mock.Anything, mock.Anything).Return(true, nil)
-				mockGoogleDrive.EXPECT().ChangesList(context.Background(), "pageToken1").Return(&drive.ChangeList{NewStartPageToken: "", NextPageToken: "pageToken1", Changes: []*drive.Change{}}, nil).MaxTimes(5)
-				mockKvStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
+				mocks.MockGoogleDrive.EXPECT().ChangesList(context.Background(), "pageToken1").Return(&drive.ChangeList{NewStartPageToken: "", NextPageToken: "pageToken1", Changes: []*drive.Change{}}, nil).MaxTimes(5)
+				mocks.MockKVStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
 			},
 		},
 		"Ensure we don't send the user a notification if they have opened the file since the last change": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
 				watchChannelData := GetSampleWatchChannelData()
-				mockKvStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
-				mockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mockGoogleDrive, nil)
-				mockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
+				mocks.MockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
 				te.mockAPI.On("KVSetWithOptions", "mutex_drive_watch_notifications_userId1", mock.Anything, mock.Anything).Return(true, nil)
 				changeList := GetSampleChangeList()
 				changeList.Changes[0].File.ViewedByMeTime = "2021-01-02T00:00:00.000Z"
-				mockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
+				mocks.MockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
 				watchChannelData = &model.WatchChannelData{
 					ChannelID:  "channelId1",
 					ResourceID: "resourceId1",
@@ -128,21 +128,21 @@ func TestNotificationWebhook(t *testing.T) {
 					Token:      "token1",
 					PageToken:  changeList.NewStartPageToken,
 				}
-				mockKvStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
-				mockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mockDriveActivity, nil)
-				mockKvStore.EXPECT().StoreLastActivityForFile("userId1", "fileId1", "2021-01-02T00:00:00.000Z").Return(nil)
+				mocks.MockKVStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mocks.MockDriveActivity, nil)
+				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", "fileId1", "2021-01-02T00:00:00.000Z").Return(nil)
 			},
 		},
 		"Ensure we only hit the drive activity api a maximum of 5 times": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
 				watchChannelData := GetSampleWatchChannelData()
-				mockKvStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
-				mockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mockGoogleDrive, nil)
-				mockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
+				mocks.MockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
 				te.mockAPI.On("KVSetWithOptions", "mutex_drive_watch_notifications_userId1", mock.Anything, mock.Anything).Return(true, nil)
 				changeList := GetSampleChangeList()
-				mockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
+				mocks.MockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
 				watchChannelData = &model.WatchChannelData{
 					ChannelID:  "channelId1",
 					ResourceID: "resourceId1",
@@ -151,31 +151,31 @@ func TestNotificationWebhook(t *testing.T) {
 					Token:      "token1",
 					PageToken:  changeList.NewStartPageToken,
 				}
-				mockKvStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
-				mockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mockDriveActivity, nil)
-				mockKvStore.EXPECT().GetLastActivityForFile("userId1", changeList.Changes[0].File.Id).Return(changeList.Changes[0].File.ModifiedTime, nil)
-				mockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
+				mocks.MockKVStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mocks.MockDriveActivity, nil)
+				mocks.MockKVStore.EXPECT().GetLastActivityForFile("userId1", changeList.Changes[0].File.Id).Return(changeList.Changes[0].File.ModifiedTime, nil)
+				mocks.MockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
 					ItemName: fmt.Sprintf("items/%s", changeList.Changes[0].File.Id),
 					Filter:   "time > \"" + changeList.Changes[0].File.ModifiedTime + "\"",
 				}).Return(&driveactivity.QueryDriveActivityResponse{Activities: []*driveactivity.DriveActivity{}, NextPageToken: "newPage"}, nil).MaxTimes(1)
-				mockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
+				mocks.MockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
 					ItemName:  fmt.Sprintf("items/%s", changeList.Changes[0].File.Id),
 					Filter:    "time > \"" + changeList.Changes[0].File.ModifiedTime + "\"",
 					PageToken: "newPage",
 				}).Return(&driveactivity.QueryDriveActivityResponse{Activities: []*driveactivity.DriveActivity{}, NextPageToken: "newPage"}, nil).MaxTimes(4)
-				mockKvStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
+				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
 			},
 		},
 		"Send one bot DM if there are more than 6 activities in a file": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
 				watchChannelData := GetSampleWatchChannelData()
-				mockKvStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
-				mockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mockGoogleDrive, nil)
-				mockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
+				mocks.MockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
 				te.mockAPI.On("KVSetWithOptions", "mutex_drive_watch_notifications_userId1", mock.Anything, mock.Anything).Return(true, nil)
 				changeList := GetSampleChangeList()
-				mockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
+				mocks.MockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
 				watchChannelData = &model.WatchChannelData{
 					ChannelID:  "channelId1",
 					ResourceID: "resourceId1",
@@ -184,10 +184,10 @@ func TestNotificationWebhook(t *testing.T) {
 					Token:      "token1",
 					PageToken:  changeList.NewStartPageToken,
 				}
-				mockKvStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
-				mockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mockDriveActivity, nil)
-				mockKvStore.EXPECT().GetLastActivityForFile("userId1", changeList.Changes[0].File.Id).Return(changeList.Changes[0].File.ModifiedTime, nil)
-				mockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
+				mocks.MockKVStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mocks.MockDriveActivity, nil)
+				mocks.MockKVStore.EXPECT().GetLastActivityForFile("userId1", changeList.Changes[0].File.Id).Return(changeList.Changes[0].File.ModifiedTime, nil)
+				mocks.MockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
 					ItemName: fmt.Sprintf("items/%s", changeList.Changes[0].File.Id),
 					Filter:   "time > \"" + changeList.Changes[0].File.ModifiedTime + "\"",
 				}).Return(&driveactivity.QueryDriveActivityResponse{Activities: []*driveactivity.DriveActivity{
@@ -224,19 +224,19 @@ func TestNotificationWebhook(t *testing.T) {
 				}, NextPageToken: ""}, nil).MaxTimes(1)
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
-				mockKvStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
+				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
 			},
 		},
 		"Send a notification for a permission change on a file": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
 				watchChannelData := GetSampleWatchChannelData()
-				mockKvStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
-				mockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mockGoogleDrive, nil)
-				mockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
+				mocks.MockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
 				te.mockAPI.On("KVSetWithOptions", "mutex_drive_watch_notifications_userId1", mock.Anything, mock.Anything).Return(true, nil)
 				changeList := GetSampleChangeList()
-				mockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
+				mocks.MockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
 				watchChannelData = &model.WatchChannelData{
 					ChannelID:  "channelId1",
 					ResourceID: "resourceId1",
@@ -245,10 +245,10 @@ func TestNotificationWebhook(t *testing.T) {
 					Token:      "token1",
 					PageToken:  changeList.NewStartPageToken,
 				}
-				mockKvStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
-				mockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mockDriveActivity, nil)
-				mockKvStore.EXPECT().GetLastActivityForFile("userId1", changeList.Changes[0].File.Id).Return(changeList.Changes[0].File.ModifiedTime, nil)
-				mockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
+				mocks.MockKVStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mocks.MockDriveActivity, nil)
+				mocks.MockKVStore.EXPECT().GetLastActivityForFile("userId1", changeList.Changes[0].File.Id).Return(changeList.Changes[0].File.ModifiedTime, nil)
+				mocks.MockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
 					ItemName: fmt.Sprintf("items/%s", changeList.Changes[0].File.Id),
 					Filter:   "time > \"" + changeList.Changes[0].File.ModifiedTime + "\"",
 				}).Return(GetSampleDriveactivityPermissionResponse(), nil).MaxTimes(1)
@@ -268,19 +268,19 @@ func TestNotificationWebhook(t *testing.T) {
 					},
 				}
 				te.mockAPI.On("CreatePost", post).Return(nil, nil).Times(1)
-				mockKvStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
+				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
 			},
 		},
 		"Send a notification for a comment on a file": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
 				watchChannelData := GetSampleWatchChannelData()
-				mockKvStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
-				mockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mockGoogleDrive, nil)
-				mockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
+				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
+				mocks.MockCluster.EXPECT().NewMutex("drive_watch_notifications_userId1").Return(pluginapi.NewClusterMutexMock(), nil)
 				te.mockAPI.On("KVSetWithOptions", "mutex_drive_watch_notifications_userId1", mock.Anything, mock.Anything).Return(true, nil)
 				changeList := GetSampleChangeList()
-				mockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
+				mocks.MockGoogleDrive.EXPECT().ChangesList(context.Background(), watchChannelData.PageToken).Return(changeList, nil).MaxTimes(1)
 				watchChannelData = &model.WatchChannelData{
 					ChannelID:  "channelId1",
 					ResourceID: "resourceId1",
@@ -289,18 +289,18 @@ func TestNotificationWebhook(t *testing.T) {
 					Token:      "token1",
 					PageToken:  changeList.NewStartPageToken,
 				}
-				mockKvStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
-				mockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mockDriveActivity, nil)
+				mocks.MockKVStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mocks.MockDriveActivity, nil)
 				file := changeList.Changes[0].File
-				mockKvStore.EXPECT().GetLastActivityForFile("userId1", file.Id).Return(file.ModifiedTime, nil)
+				mocks.MockKVStore.EXPECT().GetLastActivityForFile("userId1", file.Id).Return(file.ModifiedTime, nil)
 				activityResponse := GetSampleDriveactivityCommentResponse()
-				mockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
+				mocks.MockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
 					ItemName: fmt.Sprintf("items/%s", file.Id),
 					Filter:   "time > \"" + file.ModifiedTime + "\"",
 				}).Return(activityResponse, nil).MaxTimes(1)
 				commentID := activityResponse.Activities[0].Targets[0].FileComment.LegacyCommentId
 				comment := GetSampleComment(commentID)
-				mockGoogleDrive.EXPECT().GetComments(context.Background(), file.Id, commentID).Return(comment, nil)
+				mocks.MockGoogleDrive.EXPECT().GetComments(context.Background(), file.Id, commentID).Return(comment, nil)
 				siteURL := "http://localhost"
 				te.mockAPI.On("GetConfig").Return(&mattermostModel.Config{ServiceSettings: mattermostModel.ServiceSettings{SiteURL: &siteURL}})
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
@@ -330,7 +330,7 @@ func TestNotificationWebhook(t *testing.T) {
 					},
 				}
 				te.mockAPI.On("CreatePost", post).Return(nil, nil).Times(1)
-				mockKvStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
+				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
 			},
 		},
 	} {
@@ -339,8 +339,8 @@ func TestNotificationWebhook(t *testing.T) {
 			te := SetupTestEnvironment(t)
 			defer te.Cleanup(t)
 
-			te.plugin.KVStore = mockKvStore
-			te.plugin.GoogleClient = mockGoogleClient
+			te.plugin.KVStore = mocks.MockKVStore
+			te.plugin.GoogleClient = mocks.MockGoogleClient
 			te.plugin.initializeAPI()
 
 			test.envSetup(te)
@@ -368,7 +368,7 @@ func TestNotificationWebhook(t *testing.T) {
 }
 
 func TestFileCreationEndpoint(t *testing.T) {
-	mockKvStore, mockGoogleClient, mockGoogleDrive, _, mockGoogleDocs, mockGoogleSheets, mockGoogleSlides, _, _, _, _ := GetMockSetup(t)
+	mocks := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -403,19 +403,19 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mockGoogleDocs, nil)
+				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
 				doc := GetSampleDoc()
-				mockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
+				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
 					Title: "file name",
 				}).Return(doc, nil)
-				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil).Times(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil).Times(2)
 				te.mockAPI.On("GetConfig").Return(nil)
-				mockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
+				mocks.MockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
 					Role: "commenter",
 					Type: "anyone",
 				}).Return(&drive.Permission{}, nil).MaxTimes(1)
 				file := GetSampleFile(doc.DocumentId)
-				mockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
+				mocks.MockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
 			},
@@ -432,21 +432,21 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockGoogleClient.EXPECT().NewSheetsService(ctx, "userId1").Return(mockGoogleSheets, nil)
+				mocks.MockGoogleClient.EXPECT().NewSheetsService(ctx, "userId1").Return(mocks.MockGoogleSheets, nil)
 				sheet := GetSampleSheet()
-				mockGoogleSheets.EXPECT().Create(ctx, &sheets.Spreadsheet{
+				mocks.MockGoogleSheets.EXPECT().Create(ctx, &sheets.Spreadsheet{
 					Properties: &sheets.SpreadsheetProperties{
 						Title: "file name",
 					},
 				}).Return(sheet, nil)
-				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil).Times(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil).Times(2)
 				te.mockAPI.On("GetConfig").Return(nil)
-				mockGoogleDrive.EXPECT().CreatePermission(ctx, sheet.SpreadsheetId, &drive.Permission{
+				mocks.MockGoogleDrive.EXPECT().CreatePermission(ctx, sheet.SpreadsheetId, &drive.Permission{
 					Role: "writer",
 					Type: "anyone",
 				}).Return(&drive.Permission{}, nil).MaxTimes(1)
 				file := GetSampleFile(sheet.SpreadsheetId)
-				mockGoogleDrive.EXPECT().GetFile(ctx, sheet.SpreadsheetId).Return(file, nil)
+				mocks.MockGoogleDrive.EXPECT().GetFile(ctx, sheet.SpreadsheetId).Return(file, nil)
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
 			},
@@ -463,19 +463,19 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockGoogleClient.EXPECT().NewSlidesService(ctx, "userId1").Return(mockGoogleSlides, nil)
+				mocks.MockGoogleClient.EXPECT().NewSlidesService(ctx, "userId1").Return(mocks.MockGoogleSlides, nil)
 				presentation := GetSamplePresentation()
-				mockGoogleSlides.EXPECT().Create(ctx, &slides.Presentation{
+				mocks.MockGoogleSlides.EXPECT().Create(ctx, &slides.Presentation{
 					Title: "file name",
 				}).Return(presentation, nil)
-				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil).Times(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil).Times(2)
 				te.mockAPI.On("GetConfig").Return(nil)
-				mockGoogleDrive.EXPECT().CreatePermission(ctx, presentation.PresentationId, &drive.Permission{
+				mocks.MockGoogleDrive.EXPECT().CreatePermission(ctx, presentation.PresentationId, &drive.Permission{
 					Role: "reader",
 					Type: "anyone",
 				}).Return(&drive.Permission{}, nil).MaxTimes(1)
 				file := GetSampleFile(presentation.PresentationId)
-				mockGoogleDrive.EXPECT().GetFile(ctx, presentation.PresentationId).Return(file, nil)
+				mocks.MockGoogleDrive.EXPECT().GetFile(ctx, presentation.PresentationId).Return(file, nil)
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
 			},
@@ -492,15 +492,15 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mockGoogleDocs, nil)
+				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
 				doc := GetSampleDoc()
-				mockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
+				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
 					Title: "file name",
 				}).Return(doc, nil)
-				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil).Times(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil).Times(2)
 				te.mockAPI.On("GetConfig").Return(nil)
 				file := GetSampleFile(doc.DocumentId)
-				mockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
+				mocks.MockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
 			},
@@ -518,19 +518,19 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mockGoogleDocs, nil)
+				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
 				doc := GetSampleDoc()
-				mockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
+				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
 					Title: "file name",
 				}).Return(doc, nil)
-				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil).Times(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil).Times(2)
 				te.mockAPI.On("GetConfig").Return(nil)
-				mockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
+				mocks.MockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
 					Role: "commenter",
 					Type: "anyone",
 				}).Return(&drive.Permission{}, nil).MaxTimes(1)
 				file := GetSampleFile(doc.DocumentId)
-				mockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
+				mocks.MockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
 				createdTime, err := time.Parse(time.RFC3339, file.CreatedTime)
 				require.NoError(t, err)
 				post := &mattermostModel.Post{
@@ -564,12 +564,12 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mockGoogleDocs, nil)
+				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
 				doc := GetSampleDoc()
-				mockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
+				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
 					Title: "file name",
 				}).Return(doc, nil)
-				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil).Times(2)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil).Times(2)
 				te.mockAPI.On("GetConfig").Return(nil)
 				users := []*mattermostModel.User{
 					{
@@ -584,18 +584,18 @@ func TestFileCreationEndpoint(t *testing.T) {
 				te.mockAPI.On("GetUsersInChannel", "channelId1", "username", 0, 100).Return(users, nil).Times(1)
 				te.mockAPI.On("GetUsersInChannel", "channelId1", "username", 1, 100).Return([]*mattermostModel.User{}, nil).Times(1)
 
-				mockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
+				mocks.MockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
 					Role:         "commenter",
 					EmailAddress: users[0].Email,
 					Type:         "user",
 				}).Return(&drive.Permission{}, nil).MaxTimes(1)
-				mockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
+				mocks.MockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
 					Role:         "commenter",
 					EmailAddress: users[1].Email,
 					Type:         "user",
 				}).Return(&drive.Permission{}, nil).MaxTimes(1)
 				file := GetSampleFile(doc.DocumentId)
-				mockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
+				mocks.MockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
 				createdTime, err := time.Parse(time.RFC3339, file.CreatedTime)
 				require.NoError(t, err)
 				post := &mattermostModel.Post{
@@ -622,8 +622,8 @@ func TestFileCreationEndpoint(t *testing.T) {
 			te := SetupTestEnvironment(t)
 			defer te.Cleanup(t)
 
-			te.plugin.KVStore = mockKvStore
-			te.plugin.GoogleClient = mockGoogleClient
+			te.plugin.KVStore = mocks.MockKVStore
+			te.plugin.GoogleClient = mocks.MockGoogleClient
 			te.plugin.initializeAPI()
 
 			w := httptest.NewRecorder()
@@ -649,7 +649,7 @@ func TestFileCreationEndpoint(t *testing.T) {
 }
 
 func TestUploadFile(t *testing.T) {
-	mockKvStore, mockGoogleClient, mockGoogleDrive, _, _, _, _, _, _, _, _ := GetMockSetup(t)
+	mocks := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -690,8 +690,8 @@ func TestUploadFile(t *testing.T) {
 					Name:   "file name",
 				}, nil)
 				te.mockAPI.On("GetFile", "fileId1").Return([]byte{}, nil)
-				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil)
-				mockGoogleDrive.EXPECT().CreateFile(ctx, &drive.File{Name: "file name"}, []byte{}).Return(nil, nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil)
+				mocks.MockGoogleDrive.EXPECT().CreateFile(ctx, &drive.File{Name: "file name"}, []byte{}).Return(nil, nil)
 				te.mockAPI.On("SendEphemeralPost", "userId1", mock.Anything).Return(nil)
 			},
 		},
@@ -701,8 +701,8 @@ func TestUploadFile(t *testing.T) {
 			te := SetupTestEnvironment(t)
 			defer te.Cleanup(t)
 
-			te.plugin.KVStore = mockKvStore
-			te.plugin.GoogleClient = mockGoogleClient
+			te.plugin.KVStore = mocks.MockKVStore
+			te.plugin.GoogleClient = mocks.MockGoogleClient
 			te.plugin.initializeAPI()
 
 			w := httptest.NewRecorder()
@@ -728,7 +728,7 @@ func TestUploadFile(t *testing.T) {
 }
 
 func TestUploadMultipleFiles(t *testing.T) {
-	mockKvStore, mockGoogleClient, mockGoogleDrive, _, _, _, _, _, _, _, _ := GetMockSetup(t)
+	mocks := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -757,7 +757,7 @@ func TestUploadMultipleFiles(t *testing.T) {
 					Id:      "postId1",
 					FileIds: []string{"fileId1", "fileId2"},
 				}, nil)
-				mockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mockGoogleDrive, nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil)
 				te.mockAPI.On("GetFileInfo", "fileId1").Return(&mattermostModel.FileInfo{
 					Id:     "fileId1",
 					PostId: "postId1",
@@ -770,7 +770,7 @@ func TestUploadMultipleFiles(t *testing.T) {
 					Name:   "file name",
 				}, nil)
 				te.mockAPI.On("GetFile", "fileId2").Return([]byte{}, nil)
-				mockGoogleDrive.EXPECT().CreateFile(ctx, &drive.File{Name: "file name"}, []byte{}).Return(nil, nil).Times(2)
+				mocks.MockGoogleDrive.EXPECT().CreateFile(ctx, &drive.File{Name: "file name"}, []byte{}).Return(nil, nil).Times(2)
 				te.mockAPI.On("SendEphemeralPost", "userId1", mock.Anything).Return(nil)
 			},
 		},
@@ -780,8 +780,8 @@ func TestUploadMultipleFiles(t *testing.T) {
 			te := SetupTestEnvironment(t)
 			defer te.Cleanup(t)
 
-			te.plugin.KVStore = mockKvStore
-			te.plugin.GoogleClient = mockGoogleClient
+			te.plugin.KVStore = mocks.MockKVStore
+			te.plugin.GoogleClient = mocks.MockGoogleClient
 			te.plugin.initializeAPI()
 
 			w := httptest.NewRecorder()
@@ -807,7 +807,7 @@ func TestUploadMultipleFiles(t *testing.T) {
 }
 
 func TestCompleteConnectUserToGoogle(t *testing.T) {
-	mockKvStore, mockGoogleClient, _, _, _, _, _, _, _, mockOAuth2, mockTelemetry := GetMockSetup(t)
+	mocks := GetMockSetup(t)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -839,15 +839,15 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 		"State token does not match stored token": {
 			expectedStatusCode: http.StatusBadRequest,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockKvStore.EXPECT().GetOAuthStateToken("oauthstate_userId1").Return([]byte("randomState"), nil)
-				mockKvStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId1").Return(nil)
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate_userId1").Return([]byte("randomState"), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId1").Return(nil)
 			},
 		},
 		"State token does not contain the correct userID": {
 			expectedStatusCode: http.StatusUnauthorized,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockKvStore.EXPECT().GetOAuthStateToken("oauthstate_userId123").Return([]byte("oauthstate_userId123"), nil)
-				mockKvStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId123").Return(nil)
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate_userId123").Return([]byte("oauthstate_userId123"), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId123").Return(nil)
 			},
 			modifyRequest: func(r *http.Request) *http.Request {
 				values := r.URL.Query()
@@ -860,17 +860,17 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 		"Success complete oauth setup": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mockKvStore.EXPECT().GetOAuthStateToken("oauthstate_userId1").Return([]byte("oauthstate_userId1"), nil)
-				mockKvStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId1").Return(nil)
-				mockOAuth2.EXPECT().Exchange(ctx, "oauthcode").Return(&oauth2.Token{
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate_userId1").Return([]byte("oauthstate_userId1"), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId1").Return(nil)
+				mocks.MockOAuth2.EXPECT().Exchange(ctx, "oauthcode").Return(&oauth2.Token{
 					AccessToken: "accessToken12345",
 					TokenType:   "Bearer",
 					Expiry:      time.Now().Add(time.Hour),
 				}, nil)
-				mockKvStore.EXPECT().StoreGoogleUserToken("userId1", gomock.Any()).Return(nil)
+				mocks.MockKVStore.EXPECT().StoreGoogleUserToken("userId1", gomock.Any()).Return(nil)
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
-				mockTelemetry.EXPECT().TrackUserEvent("account_connected", "userId1", nil)
+				mocks.MockTelemetry.EXPECT().TrackUserEvent("account_connected", "userId1", nil)
 				te.mockAPI.On("PublishWebSocketEvent", "google_connect", map[string]interface{}{"connected": true, "google_client_id": "randomstring.apps.googleusercontent.com"}, &mattermostModel.WebsocketBroadcast{OmitUsers: map[string]bool(nil), UserId: "userId1", ChannelId: "", TeamId: "", ConnectionId: "", OmitConnectionId: "", ContainsSanitizedData: false, ContainsSensitiveData: false, ReliableClusterSend: false, BroadcastHooks: []string(nil), BroadcastHookArgs: []map[string]interface{}(nil)}).Times(1)
 			},
 		},
@@ -880,10 +880,10 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 			te := SetupTestEnvironment(t)
 			defer te.Cleanup(t)
 
-			te.plugin.KVStore = mockKvStore
-			te.plugin.GoogleClient = mockGoogleClient
-			te.plugin.oauthConfig = mockOAuth2
-			te.plugin.tracker = mockTelemetry
+			te.plugin.KVStore = mocks.MockKVStore
+			te.plugin.GoogleClient = mocks.MockGoogleClient
+			te.plugin.oauthConfig = mocks.MockOAuth2
+			te.plugin.tracker = mocks.MockTelemetry
 			te.plugin.initializeAPI()
 
 			w := httptest.NewRecorder()

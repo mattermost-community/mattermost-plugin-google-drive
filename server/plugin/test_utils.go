@@ -29,6 +29,20 @@ type TestEnvironment struct {
 	mockAPI *plugintest.API
 }
 
+type MockSetup struct {
+	MockKVStore       *mock_store.MockKVStore
+	MockGoogleClient  *mock_google.MockClientInterface
+	MockGoogleDrive   *mock_google.MockDriveInterface
+	MockDriveActivity *mock_google.MockDriveActivityInterface
+	MockGoogleDocs    *mock_google.MockDocsInterface
+	MockGoogleSheets  *mock_google.MockSheetsInterface
+	MockGoogleSlides  *mock_google.MockSlidesInterface
+	MockClusterMutex  *mock_pluginapi.MockClusterMutex
+	MockCluster       *mock_pluginapi.MockCluster
+	MockOAuth2        *mock_oauth2.MockConfigInterface
+	MockTelemetry     *mock_pluginapi.MockTracker
+}
+
 func SetupTestEnvironment(t *testing.T) *TestEnvironment {
 	p := Plugin{
 		BotUserID:   "bot_user_id",
@@ -61,24 +75,23 @@ func (e *TestEnvironment) ResetMocks(t *testing.T) {
 	}
 }
 
-// revive:disable-next-line:unexported-return
-func GetMockSetup(t *testing.T) (*mock_store.MockKVStore, *mock_google.MockClientInterface, *mock_google.MockDriveInterface, *mock_google.MockDriveActivityInterface, *mock_google.MockDocsInterface, *mock_google.MockSheetsInterface, *mock_google.MockSlidesInterface, *mock_pluginapi.MockClusterMutex, *mock_pluginapi.MockCluster, *mock_oauth2.MockConfigInterface, *mock_pluginapi.MockTracker) {
+func GetMockSetup(t *testing.T) *MockSetup {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockKvStore := mock_store.NewMockKVStore(ctrl)
-	mockGoogleClient := mock_google.NewMockClientInterface(ctrl)
-	mockGoogleDrive := mock_google.NewMockDriveInterface(ctrl)
-	mockDriveActivity := mock_google.NewMockDriveActivityInterface(ctrl)
-	mockGoogleDocs := mock_google.NewMockDocsInterface(ctrl)
-	mockGoogleSheets := mock_google.NewMockSheetsInterface(ctrl)
-	mockGoogleSlides := mock_google.NewMockSlidesInterface(ctrl)
-	mockClusterMutex := mock_pluginapi.NewMockClusterMutex(ctrl)
-	mockCluster := mock_pluginapi.NewMockCluster(ctrl)
-	mockOAuth2 := mock_oauth2.NewMockConfigInterface(ctrl)
-	mockTelemetry := mock_pluginapi.NewMockTracker(ctrl)
-
-	return mockKvStore, mockGoogleClient, mockGoogleDrive, mockDriveActivity, mockGoogleDocs, mockGoogleSheets, mockGoogleSlides, mockClusterMutex, mockCluster, mockOAuth2, mockTelemetry
+	return &MockSetup{
+		MockKVStore:       mock_store.NewMockKVStore(ctrl),
+		MockGoogleClient:  mock_google.NewMockClientInterface(ctrl),
+		MockGoogleDrive:   mock_google.NewMockDriveInterface(ctrl),
+		MockDriveActivity: mock_google.NewMockDriveActivityInterface(ctrl),
+		MockGoogleDocs:    mock_google.NewMockDocsInterface(ctrl),
+		MockGoogleSheets:  mock_google.NewMockSheetsInterface(ctrl),
+		MockGoogleSlides:  mock_google.NewMockSlidesInterface(ctrl),
+		MockClusterMutex:  mock_pluginapi.NewMockClusterMutex(ctrl),
+		MockCluster:       mock_pluginapi.NewMockCluster(ctrl),
+		MockOAuth2:        mock_oauth2.NewMockConfigInterface(ctrl),
+		MockTelemetry:     mock_pluginapi.NewMockTracker(ctrl),
+	}
 }
 
 func GetSampleChangeList() *drive.ChangeList {
