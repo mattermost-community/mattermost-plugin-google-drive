@@ -36,8 +36,9 @@ const (
 	// ResponseTypePlain indicates that response type is text plain
 	ResponseTypePlain ResponseType = "TEXT_RESPONSE"
 
-	APIErrorIDNotConnected = "not_connected"
-	requestTimeout         = 60 * time.Second
+	APIErrorIDNotConnected  = "not_connected"
+	requestTimeout          = 60 * time.Second
+	stateRandomStringLength = 15
 )
 
 type Context struct {
@@ -165,7 +166,7 @@ func (p *Plugin) checkAuth(handler http.HandlerFunc, responseType ResponseType) 
 }
 
 func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.Request) {
-	state := fmt.Sprintf("%v_%v", mattermostModel.NewId()[0:15], c.UserID)
+	state := fmt.Sprintf("%v_%v", mattermostModel.NewId()[0:stateRandomStringLength], c.UserID)
 
 	if err := p.KVStore.StoreOAuthStateToken(state, state); err != nil {
 		c.Log.WithError(err).Warnf("Can't store state oauth2")
@@ -224,14 +225,31 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	}
 
 	state := r.URL.Query().Get("state")
-	// state is a combination of random string and userID, so it should be 42 characters long
-	if len(state) != 42 {
+
+	stateSlice := strings.Split(state, "_")
+	if len(stateSlice) != 2 {
+		rErr = errors.New("invalid state")
+		http.Error(w, rErr.Error(), http.StatusBadRequest)
+		return
+	}
+
+	userID := stateSlice[1]
+
+	ok := mattermostModel.IsValidId(userID)
+	if !ok {
+		rErr = errors.New("invalid user id")
+		http.Error(w, rErr.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// First part of the state string is 15 characters long and there is also an underscore in the middle.
+	validLength := stateRandomStringLength + 1 + len(userID)
+	if len(state) != validLength {
 		rErr = errors.New("missing state")
 		http.Error(w, rErr.Error(), http.StatusBadRequest)
 		return
 	}
 
-	userID := strings.Split(state, "_")[1]
 	if userID != c.UserID {
 		rErr = errors.New("not authorized, incorrect user")
 		http.Error(w, rErr.Error(), http.StatusUnauthorized)

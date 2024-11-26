@@ -808,6 +808,8 @@ func TestUploadMultipleFiles(t *testing.T) {
 
 func TestCompleteConnectUserToGoogle(t *testing.T) {
 	mocks := GetMockSetup(t)
+	userID := mattermostModel.NewRandomString(26)
+	userID2 := mattermostModel.NewRandomString(26)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -839,19 +841,19 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 		"State token does not match stored token": {
 			expectedStatusCode: http.StatusBadRequest,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstatethatis42charactersinleng_userId1").Return([]byte("randomState"), nil)
-				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstatethatis42charactersinleng_userId1").Return(nil)
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate12345_"+userID).Return([]byte("randomState"), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate12345_" + userID).Return(nil)
 			},
 		},
 		"State token does not contain the correct userID": {
 			expectedStatusCode: http.StatusUnauthorized,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstatethatis42charactersinleng_userId2").Return([]byte("oauthstatethatis42charactersinleng_userId2"), nil)
-				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstatethatis42charactersinleng_userId2").Return(nil)
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate12345_"+userID2).Return([]byte("oauthstate12345_"+userID2), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate12345_" + userID2).Return(nil)
 			},
 			modifyRequest: func(r *http.Request) *http.Request {
 				values := r.URL.Query()
-				values.Set("state", "oauthstatethatis42charactersinleng_userId2")
+				values.Set("state", "oauthstate12345_"+userID2)
 				values.Set("code", "oauthcode")
 				r.URL.RawQuery = values.Encode()
 				return r
@@ -860,18 +862,18 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 		"Success complete oauth setup": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstatethatis42charactersinleng_userId1").Return([]byte("oauthstatethatis42charactersinleng_userId1"), nil)
-				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstatethatis42charactersinleng_userId1").Return(nil)
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate12345_"+userID).Return([]byte("oauthstate12345_"+userID), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate12345_" + userID).Return(nil)
 				mocks.MockOAuth2.EXPECT().Exchange(ctx, "oauthcode").Return(&oauth2.Token{
 					AccessToken: "accessToken12345",
 					TokenType:   "Bearer",
 					Expiry:      time.Now().Add(time.Hour),
 				}, nil)
-				mocks.MockKVStore.EXPECT().StoreGoogleUserToken("userId1", gomock.Any()).Return(nil)
-				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
+				mocks.MockKVStore.EXPECT().StoreGoogleUserToken(userID, gomock.Any()).Return(nil)
+				te.mockAPI.On("GetDirectChannel", userID, te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
-				mocks.MockTelemetry.EXPECT().TrackUserEvent("account_connected", "userId1", nil)
-				te.mockAPI.On("PublishWebSocketEvent", "google_connect", map[string]interface{}{"connected": true, "google_client_id": "randomstring.apps.googleusercontent.com"}, &mattermostModel.WebsocketBroadcast{OmitUsers: map[string]bool(nil), UserId: "userId1", ChannelId: "", TeamId: "", ConnectionId: "", OmitConnectionId: "", ContainsSanitizedData: false, ContainsSensitiveData: false, ReliableClusterSend: false, BroadcastHooks: []string(nil), BroadcastHookArgs: []map[string]interface{}(nil)}).Times(1)
+				mocks.MockTelemetry.EXPECT().TrackUserEvent("account_connected", userID, nil)
+				te.mockAPI.On("PublishWebSocketEvent", "google_connect", map[string]interface{}{"connected": true, "google_client_id": "randomstring.apps.googleusercontent.com"}, &mattermostModel.WebsocketBroadcast{OmitUsers: map[string]bool(nil), UserId: userID, ChannelId: "", TeamId: "", ConnectionId: "", OmitConnectionId: "", ContainsSanitizedData: false, ContainsSensitiveData: false, ReliableClusterSend: false, BroadcastHooks: []string(nil), BroadcastHookArgs: []map[string]interface{}(nil)}).Times(1)
 			},
 		},
 	} {
@@ -887,8 +889,8 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 			te.plugin.initializeAPI()
 
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodGet, "/complete?code=oauthcode&state=oauthstatethatis42charactersinleng_userId1", nil)
-			r.Header.Set("Mattermost-User-ID", "userId1")
+			r := httptest.NewRequest(http.MethodGet, "/complete?code=oauthcode&state=oauthstate12345_"+userID, nil)
+			r.Header.Set("Mattermost-User-ID", userID)
 			ctx, _ := te.plugin.createContext(w, r)
 			if test.modifyRequest != nil {
 				r = test.modifyRequest(r)
