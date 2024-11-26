@@ -93,12 +93,27 @@ func (c *Configuration) IsValid() error {
 	if c.GoogleOAuthClientID == "" {
 		return errors.New("must have a Google OAuth client id")
 	}
+
+	// Cannot find guidance on actual length of Google OAuth client ID but this should be safe
+	if len(c.GoogleOAuthClientID) > 200 {
+		return errors.New("Google OAuth client id must be less than 200 characters")
+	}
+
 	if c.GoogleOAuthClientSecret == "" {
 		return errors.New("must have a Google OAuth client secret")
 	}
 
+	// Cannot find guidance on actual length of Google OAuth client secret but this should be safe
+	if len(c.GoogleOAuthClientSecret) > 100 {
+		return errors.New("Google OAuth client secret must be less than 200 characters")
+	}
+
 	if c.EncryptionKey == "" {
 		return errors.New("must have an encryption key")
+	}
+
+	if len(c.EncryptionKey) != 32 {
+		return errors.New("encryption key must be 32 characters long")
 	}
 
 	if c.QueriesPerMinute <= 0 {

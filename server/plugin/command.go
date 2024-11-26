@@ -158,6 +158,14 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		return &model.CommandResponse{}, nil
 	}
 
+	post := &model.Post{
+		UserId:    p.BotUserID,
+		ChannelId: args.ChannelId,
+		RootId:    args.RootId,
+		Message:   action + " is not a valid command. " + commandDescription,
+	}
+	p.Client.Post.SendEphemeralPost(args.UserId, post)
+
 	return &model.CommandResponse{}, nil
 }
 
