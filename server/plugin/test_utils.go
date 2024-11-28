@@ -1,11 +1,14 @@
 package plugin
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
+
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
@@ -14,6 +17,7 @@ import (
 
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 
 	mock_pluginapi "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/pluginapi/mocks"
 
@@ -226,6 +230,34 @@ func GetSampleFile(fileID string) *drive.File {
 			{
 				DisplayName: "owner1",
 				PhotoLink:   "https://drive.google.com/file/d/fileId1/view/photo",
+			},
+		},
+	}
+}
+
+func GetDMPost(botID string, comment *drive.Comment, file *drive.File, siteURL string) *mattermostModel.Post {
+	return &mattermostModel.Post{
+		UserId:    botID,
+		ChannelId: "channelId1",
+		Message:   "",
+		Props: mattermostModel.StringInterface{
+			"attachments": []any{
+				map[string]any{
+					"pretext": fmt.Sprintf("%s commented on %s %s", comment.Author.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, file.WebViewLink)),
+					"text":    fmt.Sprintf("%s\n> %s", "", utils.MarkdownToHTMLEntities(comment.Content)),
+					"actions": []any{
+						map[string]any{
+							"name": "Reply to comment",
+							"integration": map[string]any{
+								"url": fmt.Sprintf("%s/plugins/%s/api/v1/reply_dialog", siteURL, Manifest.Id),
+								"context": map[string]any{
+									"commentID": comment.Id,
+									"fileID":    file.Id,
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
