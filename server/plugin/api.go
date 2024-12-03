@@ -245,7 +245,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	// First part of the state string is 15 characters long and there is also an underscore in the middle.
 	validLength := stateRandomStringLength + 1 + len(userID)
 	if len(state) != validLength {
-		rErr = errors.New("missing state")
+		rErr = errors.New("invalid state")
 		http.Error(w, rErr.Error(), http.StatusBadRequest)
 		return
 	}
