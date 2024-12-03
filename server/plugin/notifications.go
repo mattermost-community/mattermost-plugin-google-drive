@@ -19,7 +19,7 @@ import (
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
-func getCommentUsingDiscussionID(ctx context.Context, dSrv *google.DriveService, fileID string, activity *driveactivity.DriveActivity) (*drive.Comment, error) {
+func getCommentUsingDiscussionID(ctx context.Context, dSrv google.DriveInterface, fileID string, activity *driveactivity.DriveActivity) (*drive.Comment, error) {
 	if len(activity.Targets) == 0 ||
 		activity.Targets[0].FileComment == nil ||
 		activity.Targets[0].FileComment.LegacyDiscussionId == "" {
@@ -33,7 +33,7 @@ func getCommentUsingDiscussionID(ctx context.Context, dSrv *google.DriveService,
 	return comment, nil
 }
 
-func (p *Plugin) handleAddedComment(ctx context.Context, dSrv *google.DriveService, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
+func (p *Plugin) handleAddedComment(ctx context.Context, dSrv google.DriveInterface, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
 	if err != nil {
 		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
@@ -72,7 +72,7 @@ func (p *Plugin) handleDeletedComment(userID string, activity *driveactivity.Dri
 	p.createBotDMPost(userID, message, nil)
 }
 
-func (p *Plugin) handleReplyAdded(ctx context.Context, dSrv *google.DriveService, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
+func (p *Plugin) handleReplyAdded(ctx context.Context, dSrv google.DriveInterface, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
 	if err != nil {
 		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
@@ -120,7 +120,7 @@ func (p *Plugin) handleReplyDeleted(userID string, activity *driveactivity.Drive
 	p.createBotDMPost(userID, message, nil)
 }
 
-func (p *Plugin) handleResolvedComment(ctx context.Context, dSrv *google.DriveService, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
+func (p *Plugin) handleResolvedComment(ctx context.Context, dSrv google.DriveInterface, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	if len(activity.Targets) == 0 ||
 		activity.Targets[0].FileComment == nil ||
 		activity.Targets[0].FileComment.LegacyCommentId == "" {
@@ -138,7 +138,7 @@ func (p *Plugin) handleResolvedComment(ctx context.Context, dSrv *google.DriveSe
 	p.createBotDMPost(userID, message, nil)
 }
 
-func (p *Plugin) handleReopenedComment(ctx context.Context, dSrv *google.DriveService, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
+func (p *Plugin) handleReopenedComment(ctx context.Context, dSrv google.DriveInterface, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
 	if err != nil {
 		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
@@ -155,7 +155,7 @@ func (p *Plugin) handleSuggestionReplyAdded(userID string, activity *driveactivi
 	p.createBotDMPost(userID, message, nil)
 }
 
-func (p *Plugin) handleCommentNotifications(ctx context.Context, dSrv *google.DriveService, file *drive.File, userID string, activity *driveactivity.DriveActivity) {
+func (p *Plugin) handleCommentNotifications(ctx context.Context, dSrv google.DriveInterface, file *drive.File, userID string, activity *driveactivity.DriveActivity) {
 	fileID := file.Id
 
 	if ok := activity.PrimaryActionDetail.Comment.Post != nil; !ok {
@@ -317,7 +317,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 
 	err = p.KVStore.DeleteWatchChannelData(userID)
 	if err != nil {
-		p.API.LogError("Failed to delete Google Drive watch channel data", "err", err)
+		p.API.LogError("Failed to delete Google Drive watch channel data", "err", err, "userID", userID)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 
@@ -326,7 +326,7 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 		ResourceId: watchChannelData.ResourceID,
 	})
 	if err != nil {
-		p.API.LogError("Failed to stop Google Drive change channel", "err", err)
+		p.API.LogError("Failed to stop Google Drive change channel", "err", err, "userID", userID)
 		return "Something went wrong while stopping Google Drive activity notifications. Please contact your organization admin for support."
 	}
 

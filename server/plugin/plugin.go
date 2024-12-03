@@ -19,6 +19,7 @@ import (
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
@@ -49,10 +50,11 @@ type Plugin struct {
 	FlowManager *FlowManager
 
 	oauthBroker *OAuthBroker
+	oauthConfig oauth2.Config
 
 	channelRefreshJob *cluster.Job
 
-	GoogleClient *google.Client
+	GoogleClient google.ClientInterface
 }
 
 func (p *Plugin) ensurePluginAPIClient() {
@@ -92,8 +94,8 @@ func (p *Plugin) refreshDriveWatchChannels() {
 	worker := func(channels <-chan model.WatchChannelData, wg *sync.WaitGroup) {
 		defer wg.Done()
 		for channel := range channels {
-			_ = p.startDriveWatchChannel(channel.MMUserID)
 			p.stopDriveActivityNotifications(channel.MMUserID)
+			_ = p.startDriveWatchChannel(channel.MMUserID)
 		}
 	}
 
@@ -116,13 +118,13 @@ func (p *Plugin) refreshDriveWatchChannels() {
 		}
 
 		for _, key := range keys {
-			var watchChannelData model.WatchChannelData
-			err = p.Client.KV.Get(key, &watchChannelData)
+			var watchChannelData *model.WatchChannelData
+			watchChannelData, err := p.KVStore.GetWatchChannelDataUsingKey(key)
 			if err != nil {
 				continue
 			}
 			if time.Until(time.Unix(watchChannelData.Expiration, 0)) < 24*time.Hour {
-				channels <- watchChannelData
+				channels <- *watchChannelData
 			}
 		}
 
@@ -172,7 +174,9 @@ func (p *Plugin) OnActivate() error {
 		return errors.Wrap(err, "failed to create a scheduled recurring job to refresh watch channels")
 	}
 
-	p.GoogleClient = google.NewGoogleClient(p.getOAuthConfig(), p.getConfiguration(), p.KVStore, p.API)
+	p.oauthConfig = oauth2.GetOAuthConfig(p.getConfiguration(), siteURL, Manifest.Id)
+
+	p.GoogleClient = google.NewGoogleClient(p.oauthConfig, p.getConfiguration(), p.KVStore, p.API)
 	return nil
 }
 

@@ -5,6 +5,7 @@ import "github.com/mattermost-community/mattermost-plugin-google-drive/server/pl
 type KVStore interface {
 	StoreWatchChannelData(userID string, watchChannelData model.WatchChannelData) error
 	GetWatchChannelData(userID string) (*model.WatchChannelData, error)
+	GetWatchChannelDataUsingKey(key string) (*model.WatchChannelData, error)
 	ListWatchChannelDataKeys(page, perPage int) ([]string, error)
 	DeleteWatchChannelData(userID string) error
 

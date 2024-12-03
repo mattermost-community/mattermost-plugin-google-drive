@@ -27,7 +27,10 @@ func (p *Plugin) sendFileCreatedMessage(ctx context.Context, channelID, fileID, 
 		return errors.Wrap(err, "failed to fetch file")
 	}
 
-	createdTime, _ := time.Parse(time.RFC3339, file.CreatedTime)
+	createdTime, err := time.Parse(time.RFC3339, file.CreatedTime)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse created time")
+	}
 	if shareInChannel {
 		post := model.Post{
 			UserId:    p.BotUserID,

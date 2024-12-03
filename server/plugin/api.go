@@ -14,17 +14,16 @@ import (
 	"github.com/gorilla/mux"
 	mattermostModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/logger"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
 	"github.com/pkg/errors"
-	"golang.org/x/oauth2"
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/driveactivity/v2"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
 
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/pluginapi"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
@@ -166,15 +165,7 @@ func (p *Plugin) checkAuth(handler http.HandlerFunc, responseType ResponseType) 
 }
 
 func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("Mattermost-User-ID")
-	if userID == "" {
-		http.Error(w, "Not authorized", http.StatusUnauthorized)
-		return
-	}
-
-	conf := p.getOAuthConfig()
-
-	state := fmt.Sprintf("%v_%v", mattermostModel.NewId()[0:15], userID)
+	state := fmt.Sprintf("%v_%v", mattermostModel.NewId()[0:15], c.UserID)
 
 	if err := p.KVStore.StoreOAuthStateToken(state, state); err != nil {
 		c.Log.WithError(err).Warnf("Can't store state oauth2")
@@ -182,9 +173,9 @@ func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	url := conf.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent"))
+	url := p.oauthConfig.AuthCodeURL(state)
 
-	ch := p.oauthBroker.SubscribeOAuthComplete(userID)
+	ch := p.oauthBroker.SubscribeOAuthComplete(c.UserID)
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -201,7 +192,7 @@ func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.
 		}
 
 		if errorMsg != "" {
-			_, err := p.poster.DMWithAttachments(userID, &mattermostModel.SlackAttachment{
+			_, err := p.poster.DMWithAttachments(c.UserID, &mattermostModel.SlackAttachment{
 				Text:  fmt.Sprintf("There was an error connecting to your Google account: `%s` Please double check your configuration.", errorMsg),
 				Color: string(flow.ColorDanger),
 			})
@@ -210,27 +201,19 @@ func (p *Plugin) connectUserToGoogle(c *Context, w http.ResponseWriter, r *http.
 			}
 		}
 
-		p.oauthBroker.UnsubscribeOAuthComplete(userID, ch)
+		p.oauthBroker.UnsubscribeOAuthComplete(c.UserID, ch)
 	}()
 
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
 func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, r *http.Request) {
-	authedUserID := r.Header.Get("Mattermost-User-ID")
-	if authedUserID == "" {
-		http.Error(w, "Not authorized", http.StatusUnauthorized)
-		return
-	}
-
 	var rErr error
 	defer func() {
-		p.oauthBroker.publishOAuthComplete(authedUserID, rErr, false)
+		p.oauthBroker.publishOAuthComplete(c.UserID, rErr, false)
 	}()
 
 	config := p.getConfiguration()
-
-	conf := p.getOAuthConfig()
 
 	code := r.URL.Query().Get("code")
 	if len(code) == 0 {
@@ -240,6 +223,11 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	}
 
 	state := r.URL.Query().Get("state")
+	if len(state) == 0 {
+		rErr = errors.New("missing state")
+		http.Error(w, rErr.Error(), http.StatusBadRequest)
+		return
+	}
 
 	storedState, err := p.KVStore.GetOAuthStateToken(state)
 	if err != nil {
@@ -266,13 +254,13 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 
 	userID := strings.Split(state, "_")[1]
 
-	if userID != authedUserID {
+	if userID != c.UserID {
 		rErr = errors.New("not authorized, incorrect user")
 		http.Error(w, rErr.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	token, err := conf.Exchange(c.Ctx, code)
+	token, err := p.oauthConfig.Exchange(c.Ctx, code)
 	if err != nil {
 		c.Log.WithError(err).Warnf("Can't exchange state")
 
@@ -379,6 +367,11 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 	var fileCreationErr error
 	createdFileID := ""
 	fileType := r.URL.Query().Get("type")
+	if fileType == "" {
+		c.Log.Errorf("File type not found in the request")
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
+		return
+	}
 	switch fileType {
 	case "doc":
 		{
@@ -466,13 +459,13 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	watchChannelData, err := p.KVStore.GetWatchChannelData(userID)
 	if err != nil {
-		p.API.LogError("Unable to fund watch channel data", "err", err, "userID", userID)
+		p.API.LogError("Unable to find watch channel data", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	token := r.Header.Get("X-Goog-Channel-Token")
-	if watchChannelData.Token != token {
+	if watchChannelData.Token == "" || watchChannelData.Token != token {
 		p.API.LogError("Invalid channel token", "userID", userID)
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -485,8 +478,9 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
+	clusterService := pluginapi.NewClusterService(p.API)
 	// Mutex to prevent race conditions from multiple requests directed at the same user in a short period of time.
-	m, err := cluster.NewMutex(p.API, "drive_watch_notifications_"+userID)
+	m, err := clusterService.NewMutex("drive_watch_notifications_" + userID)
 	if err != nil {
 		p.API.LogError("Failed to create mutex", "err", err, "userID", userID)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -702,8 +696,19 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 		return
 	}
 
-	commentID := request.Context["commentID"].(string)
-	fileID := request.Context["fileID"].(string)
+	commentID, ok := request.Context["commentID"].(string)
+	if !ok {
+		p.API.LogError("Comment ID not found in the request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	fileID, ok := request.Context["fileID"].(string)
+	if !ok {
+		p.API.LogError("File ID not found in the request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	urlStr := fmt.Sprintf("%s/plugins/%s/api/v1/reply?fileID=%s&commentID=%s",
 		*p.API.GetConfig().ServiceSettings.SiteURL,
 		url.PathEscape(Manifest.Id),
@@ -756,6 +761,13 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 	commentID := r.URL.Query().Get("commentID")
 	fileID := r.URL.Query().Get("fileID")
 
+	message, ok := request.Submission["message"].(string)
+	if !ok {
+		p.API.LogError("Message not found in the request")
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
+		return
+	}
+
 	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
 		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
@@ -763,7 +775,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 		return
 	}
 	reply, err := driveService.CreateReply(c.Ctx, fileID, commentID, &drive.Reply{
-		Content: request.Submission["message"].(string),
+		Content: message,
 	})
 	if err != nil {
 		p.API.LogError("Failed to create comment reply", "err", err)
@@ -795,24 +807,30 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 	}
 	defer r.Body.Close()
 
-	fileID := request.Submission["fileID"].(string)
+	fileID, ok := request.Submission["fileID"].(string)
+	if !ok || fileID == "" {
+		c.Log.Errorf("File ID not found in the request")
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
+		return
+	}
+
 	fileInfo, appErr := p.API.GetFileInfo(fileID)
 	if appErr != nil {
-		p.API.LogError("Unable to fetch file info", "err", appErr, "fileID", fileID)
+		c.Log.WithError(appErr).Errorf("Unable to fetch file info", "fileID", fileID)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
 	fileReader, appErr := p.API.GetFile(fileID)
 	if appErr != nil {
-		p.API.LogError("Unable to fetch file data", "err", appErr, "fileID", fileID)
+		c.Log.WithError(appErr).Errorf("Unable to fetch file data", "fileID", fileID)
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
 
 	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
+		c.Log.WithError(err).Errorf("Failed to create Google Drive service")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -821,7 +839,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 		Name: fileInfo.Name,
 	}, fileReader)
 	if err != nil {
-		p.API.LogError("Failed to upload file", "err", err)
+		c.Log.WithError(err).Errorf("Failed to upload file")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -837,7 +855,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	var request mattermostModel.SubmitDialogRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
-		p.API.LogError("Failed to decode SubmitDialogRequest", "err", err)
+		c.Log.WithError(err).Errorf("Failed to decode SubmitDialogRequest")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
@@ -846,14 +864,14 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	postID := request.State
 	post, appErr := p.API.GetPost(postID)
 	if appErr != nil {
-		p.API.LogError("Failed to get post", "err", appErr, "postID", postID)
-		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
+		c.Log.WithError(appErr).Errorf("Failed to get post", "postID", postID)
+		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
 
 	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, c.UserID)
 	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", c.UserID)
+		c.Log.WithError(err).Errorf("Failed to create Google Drive service")
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -862,14 +880,14 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 	for _, fileID := range fileIDs {
 		fileInfo, appErr := p.API.GetFileInfo(fileID)
 		if appErr != nil {
-			p.API.LogError("Unable to get file info", "err", appErr, "fileID", fileID)
+			c.Log.WithError(appErr).Errorf("Unable to get file info", "fileID", fileID)
 			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 			return
 		}
 
 		fileReader, appErr := p.API.GetFile(fileID)
 		if appErr != nil {
-			p.API.LogError("Unable to get file", "err", appErr, "fileID", fileID)
+			c.Log.WithError(appErr).Errorf("Unable to get file", "fileID", fileID)
 			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 			return
 		}
@@ -878,7 +896,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 			Name: fileInfo.Name,
 		}, fileReader)
 		if err != nil {
-			p.API.LogError("Failed to upload file", "err", err)
+			c.Log.WithError(err).Errorf("Failed to upload file")
 			p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 			return
 		}

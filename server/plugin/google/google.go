@@ -6,7 +6,7 @@ import (
 	"errors"
 
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"golang.org/x/oauth2"
+	oauth2package "golang.org/x/oauth2"
 	"golang.org/x/time/rate"
 	"google.golang.org/api/docs/v1"
 	driveV2 "google.golang.org/api/drive/v2"
@@ -20,11 +20,12 @@ import (
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/model"
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2"
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
 type Client struct {
-	oauthConfig  *oauth2.Config
+	oauthConfig  oauth2.Config
 	config       *config.Configuration
 	kvstore      kvstore.KVStore
 	papi         plugin.API
@@ -47,7 +48,7 @@ const (
 	driveActivityServiceType = "driveactivity"
 )
 
-func NewGoogleClient(oauthConfig *oauth2.Config, config *config.Configuration, kvstore kvstore.KVStore, papi plugin.API) *Client {
+func NewGoogleClient(oauthConfig oauth2.Config, config *config.Configuration, kvstore kvstore.KVStore, papi plugin.API) ClientInterface {
 	maximumQueriesPerSecond := config.QueriesPerMinute / 60
 	burstSize := config.BurstSize
 
@@ -60,8 +61,8 @@ func NewGoogleClient(oauthConfig *oauth2.Config, config *config.Configuration, k
 	}
 }
 
-func (g *Client) NewDriveService(ctx context.Context, userID string) (*DriveService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewDriveService(ctx context.Context, userID string) (DriveInterface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,8 +94,8 @@ func (g *Client) NewDriveService(ctx context.Context, userID string) (*DriveServ
 	}, nil
 }
 
-func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (*DriveServiceV2, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (DriveV2Interface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +127,8 @@ func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (*DriveSe
 	}, nil
 }
 
-func (g *Client) NewDocsService(ctx context.Context, userID string) (*DocsService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewDocsService(ctx context.Context, userID string) (DocsInterface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -154,8 +155,8 @@ func (g *Client) NewDocsService(ctx context.Context, userID string) (*DocsServic
 	}, nil
 }
 
-func (g *Client) NewSlidesService(ctx context.Context, userID string) (*SlidesService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewSlidesService(ctx context.Context, userID string) (SlidesInterface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -182,8 +183,8 @@ func (g *Client) NewSlidesService(ctx context.Context, userID string) (*SlidesSe
 	}, nil
 }
 
-func (g *Client) NewSheetsService(ctx context.Context, userID string) (*SheetsService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewSheetsService(ctx context.Context, userID string) (SheetsInterface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -210,8 +211,8 @@ func (g *Client) NewSheetsService(ctx context.Context, userID string) (*SheetsSe
 	}, nil
 }
 
-func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (*DriveActivityService, error) {
-	authToken, err := g.getGoogleUserToken(userID)
+func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (DriveActivityInterface, error) {
+	authToken, err := g.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +239,7 @@ func (g *Client) NewDriveActivityService(ctx context.Context, userID string) (*D
 	}, nil
 }
 
-func (g *Client) getGoogleUserToken(userID string) (*oauth2.Token, error) {
+func (g *Client) GetGoogleUserToken(userID string) (*oauth2package.Token, error) {
 	encryptedToken, err := g.kvstore.GetGoogleUserToken(userID)
 	if err != nil {
 		return nil, err
@@ -253,7 +254,7 @@ func (g *Client) getGoogleUserToken(userID string) (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	var oauthToken oauth2.Token
+	var oauthToken oauth2package.Token
 	err = json.Unmarshal([]byte(decryptedToken), &oauthToken)
 
 	return &oauthToken, err

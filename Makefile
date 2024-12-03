@@ -291,6 +291,23 @@ logs:
 logs-watch:
 	./build/bin/pluginctl logs-watch $(PLUGIN_ID)
 
+## Generate mocks
+mock:
+ifneq ($(HAS_SERVER),)
+	go install github.com/golang/mock/mockgen@v1.6.0
+	mockgen -destination=server/plugin/google/mocks/mock_drive_activity.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google DriveActivityInterface
+	mockgen -destination=server/plugin/google/mocks/mock_google.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google ClientInterface
+	mockgen -destination=server/plugin/pluginapi/mocks/mock_cluster_mutex.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/pluginapi ClusterMutex
+	mockgen -destination=server/plugin/pluginapi/mocks/mock_cluster.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/pluginapi Cluster
+	mockgen -destination=server/plugin/google/mocks/mock_drive.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google DriveInterface
+	mockgen -destination=server/plugin/kvstore/mocks/mock_kvstore.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/kvstore KVStore
+	mockgen -destination=server/plugin/google/mocks/mock_sheets.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google SheetsInterface
+	mockgen -destination=server/plugin/google/mocks/mock_docs.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google DocsInterface
+	mockgen -destination=server/plugin/google/mocks/mock_slides.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google SlidesInterface
+	mockgen -destination=server/plugin/oauth2/mocks/mock_oauth2.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2 ConfigInterface
+	mockgen -destination=server/plugin/pluginapi/mocks/mock_telemetry.go -package=mocks github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry Tracker
+endif
+
 # Help documentation à la https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 help:
 	@cat Makefile build/*.mk | grep -v '\.PHONY' |  grep -v '\help:' | grep -B1 -E '^[a-zA-Z0-9_.-]+:.*' | sed -e "s/:.*//" | sed -e "s/^## //" |  grep -v '\-\-' | sed '1!G;h;$$!d' | awk 'NR%2{printf "\033[36m%-30s\033[0m",$$0;next;}1' | sort
