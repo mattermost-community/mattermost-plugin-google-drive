@@ -304,7 +304,7 @@ ifneq ($(HAS_SERVER),)
 	mockgen -destination=server/plugin/google/mocks/mock_sheets.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google SheetsInterface
 	mockgen -destination=server/plugin/google/mocks/mock_docs.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google DocsInterface
 	mockgen -destination=server/plugin/google/mocks/mock_slides.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google SlidesInterface
-	mockgen -destination=server/plugin/oauth2/mocks/mock_oauth2.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2 ConfigInterface
+	mockgen -destination=server/plugin/oauth2/mocks/mock_oauth2.go -package=mocks github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2 Config
 	mockgen -destination=server/plugin/pluginapi/mocks/mock_telemetry.go -package=mocks github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry Tracker
 endif
 

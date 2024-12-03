@@ -3,7 +3,7 @@ package google
 import (
 	"context"
 
-	"golang.org/x/oauth2"
+	oauth2package "golang.org/x/oauth2"
 	"google.golang.org/api/docs/v1"
 	driveV2 "google.golang.org/api/drive/v2"
 	"google.golang.org/api/drive/v3"
@@ -11,6 +11,8 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
+
+	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2"
 )
 
 type ClientInterface interface {
@@ -20,8 +22,8 @@ type ClientInterface interface {
 	NewSlidesService(ctx context.Context, userID string) (SlidesInterface, error)
 	NewSheetsService(ctx context.Context, userID string) (SheetsInterface, error)
 	NewDriveActivityService(ctx context.Context, userID string) (DriveActivityInterface, error)
-	GetGoogleUserToken(userID string) (*oauth2.Token, error)
-	ReloadRateLimits(newQueriesPerMinute int, newBurstSize int)
+	GetGoogleUserToken(userID string) (*oauth2package.Token, error)
+	ReloadConfigs(newQueriesPerMinute int, newBurstSize int, oauthConfig oauth2.Config)
 }
 
 type DriveInterface interface {
