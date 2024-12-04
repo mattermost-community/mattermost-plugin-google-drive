@@ -36,7 +36,7 @@ func getCommentUsingDiscussionID(ctx context.Context, dSrv google.DriveInterface
 func (p *Plugin) handleAddedComment(ctx context.Context, dSrv google.DriveInterface, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
 	if err != nil {
-		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
+		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID, "google_drive_fileID", fileID)
 		return
 	}
 	quotedValue := ""
@@ -67,15 +67,18 @@ func (p *Plugin) handleAddedComment(ctx context.Context, dSrv google.DriveInterf
 }
 
 func (p *Plugin) handleDeletedComment(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
-	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("A comment was deleted in %s %s", utils.GetInlineImage("Google failed:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
+	urlToComment := file.Name
+	if len(activity.Targets) != 0 && activity.Targets[0].FileComment != nil && activity.Targets[0].FileComment.LinkToDiscussion != "" {
+		urlToComment = utils.GetHyperlink(file.Name, activity.Targets[0].FileComment.LinkToDiscussion)
+	}
+	message := fmt.Sprintf("A comment was deleted in %s %s", utils.GetInlineImage("Google failed:", file.IconLink), urlToComment)
 	p.createBotDMPost(userID, message, nil)
 }
 
 func (p *Plugin) handleReplyAdded(ctx context.Context, dSrv google.DriveInterface, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
 	if err != nil {
-		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
+		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID, "google_drive_fileID", fileID)
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
@@ -115,8 +118,11 @@ func (p *Plugin) handleReplyAdded(ctx context.Context, dSrv google.DriveInterfac
 }
 
 func (p *Plugin) handleReplyDeleted(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
-	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("A comment reply was deleted in %s %s", utils.GetInlineImage("Google failed:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
+	urlToComment := file.Name
+	if len(activity.Targets) != 0 && activity.Targets[0].FileComment != nil && activity.Targets[0].FileComment.LinkToDiscussion != "" {
+		urlToComment = utils.GetHyperlink(file.Name, activity.Targets[0].FileComment.LinkToDiscussion)
+	}
+	message := fmt.Sprintf("A comment reply was deleted in %s %s", utils.GetInlineImage("Google failed:", file.IconLink), urlToComment)
 	p.createBotDMPost(userID, message, nil)
 }
 
@@ -124,7 +130,7 @@ func (p *Plugin) handleResolvedComment(ctx context.Context, dSrv google.DriveInt
 	if len(activity.Targets) == 0 ||
 		activity.Targets[0].FileComment == nil ||
 		activity.Targets[0].FileComment.LegacyCommentId == "" {
-		p.API.LogWarn("There is no legacyCommentId present in the activity", "userID", userID)
+		p.API.LogWarn("There is no legacyCommentId present in the activity", "userID", userID, "google_drive_fileID", fileID)
 		return
 	}
 	commentID := activity.Targets[0].FileComment.LegacyCommentId
@@ -141,7 +147,7 @@ func (p *Plugin) handleResolvedComment(ctx context.Context, dSrv google.DriveInt
 func (p *Plugin) handleReopenedComment(ctx context.Context, dSrv google.DriveInterface, fileID, userID string, activity *driveactivity.DriveActivity, file *drive.File) {
 	comment, err := getCommentUsingDiscussionID(ctx, dSrv, fileID, activity)
 	if err != nil {
-		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID)
+		p.API.LogError("Failed to get comment by legacyDiscussionId", "err", err, "userID", userID, "google_drive_fileID", fileID)
 		return
 	}
 	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
@@ -150,8 +156,11 @@ func (p *Plugin) handleReopenedComment(ctx context.Context, dSrv google.DriveInt
 }
 
 func (p *Plugin) handleSuggestionReplyAdded(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
-	urlToComment := activity.Targets[0].FileComment.LinkToDiscussion
-	message := fmt.Sprintf("%s added a new suggestion in %s %s", file.LastModifyingUser.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, urlToComment))
+	urlToComment := file.Name
+	if len(activity.Targets) != 0 && activity.Targets[0].FileComment != nil && activity.Targets[0].FileComment.LinkToDiscussion != "" {
+		urlToComment = utils.GetHyperlink(file.Name, activity.Targets[0].FileComment.LinkToDiscussion)
+	}
+	message := fmt.Sprintf("%s added a new suggestion in %s %s", file.LastModifyingUser.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), urlToComment)
 	p.createBotDMPost(userID, message, nil)
 }
 

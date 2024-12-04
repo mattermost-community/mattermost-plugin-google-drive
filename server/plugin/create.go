@@ -32,14 +32,27 @@ func (p *Plugin) sendFileCreatedMessage(ctx context.Context, channelID, fileID, 
 		return errors.Wrap(err, "failed to parse created time")
 	}
 	if shareInChannel {
+		userDisplayName := ""
+		userPhotoLink := ""
+		if len(file.Owners) != 0 {
+			userDisplayName = file.Owners[0].DisplayName
+			userPhotoLink = file.Owners[0].PhotoLink
+		} else {
+			user, err := p.Client.User.Get(userID)
+			if err != nil {
+				return errors.Wrap(err, "failed to fetch user")
+			}
+			userDisplayName = user.Username
+		}
+
 		post := model.Post{
 			UserId:    p.BotUserID,
 			ChannelId: channelID,
 			Message:   message,
 			Props: map[string]any{
 				"attachments": []any{map[string]any{
-					"author_name": file.Owners[0].DisplayName,
-					"author_icon": file.Owners[0].PhotoLink,
+					"author_name": userDisplayName,
+					"author_icon": userPhotoLink,
 					"title":       file.Name,
 					"title_link":  file.WebViewLink,
 					"footer":      fmt.Sprintf("Google Drive for Mattermost | %s", createdTime),
