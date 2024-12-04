@@ -37,18 +37,10 @@ func TestNotificationWebhook(t *testing.T) {
 		modifyRequest      func(*http.Request) *http.Request
 	}{
 		"No UserId provided": {
-			expectedStatusCode: http.StatusBadRequest,
+			expectedStatusCode: http.StatusInternalServerError,
 			envSetup: func(te *TestEnvironment) {
-				watchChannelData := &model.WatchChannelData{
-					ChannelID:  "",
-					ResourceID: "",
-					MMUserID:   "",
-					Expiration: 0,
-					Token:      "",
-					PageToken:  "",
-				}
-				mocks.MockKVStore.EXPECT().GetWatchChannelData("").Return(watchChannelData, nil)
-				te.mockAPI.On("LogError", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).Maybe()
+				te.mockAPI.On("GetUser", "").Return(nil, &mattermostModel.AppError{})
+				te.mockAPI.On("LogError", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string"))
 			},
 			modifyRequest: func(r *http.Request) *http.Request {
 				r.URL.RawQuery = ""
@@ -58,6 +50,7 @@ func TestNotificationWebhook(t *testing.T) {
 		"Invalid Google token": {
 			expectedStatusCode: http.StatusBadRequest,
 			envSetup: func(te *TestEnvironment) {
+				te.mockAPI.On("GetUser", "userId1").Return(&mattermostModel.User{}, nil)
 				watchChannelData := GetSampleWatchChannelData()
 				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil)
 				te.mockAPI.On("LogError", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).Maybe()
@@ -70,6 +63,7 @@ func TestNotificationWebhook(t *testing.T) {
 		"Page token missing from KVstore but retrieve from GetStartPageToken method": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
+				te.mockAPI.On("GetUser", "userId1").Return(&mattermostModel.User{}, nil)
 				watchChannelData := &model.WatchChannelData{
 					ChannelID:  "channelId1",
 					ResourceID: "resourceId1",
@@ -100,6 +94,7 @@ func TestNotificationWebhook(t *testing.T) {
 		"Ensure we only hit the changelist a maximum of 5 times": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
+				te.mockAPI.On("GetUser", "userId1").Return(&mattermostModel.User{}, nil)
 				watchChannelData := GetSampleWatchChannelData()
 				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
 				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
@@ -112,6 +107,7 @@ func TestNotificationWebhook(t *testing.T) {
 		"Ensure we don't send the user a notification if they have opened the file since the last change": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
+				te.mockAPI.On("GetUser", "userId1").Return(&mattermostModel.User{}, nil)
 				watchChannelData := GetSampleWatchChannelData()
 				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
 				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
@@ -136,6 +132,7 @@ func TestNotificationWebhook(t *testing.T) {
 		"Ensure we only hit the drive activity api a maximum of 5 times": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
+				te.mockAPI.On("GetUser", "userId1").Return(&mattermostModel.User{}, nil)
 				watchChannelData := GetSampleWatchChannelData()
 				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
 				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
@@ -169,6 +166,7 @@ func TestNotificationWebhook(t *testing.T) {
 		"Send one bot DM if there are more than 6 activities in a file": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
+				te.mockAPI.On("GetUser", "userId1").Return(&mattermostModel.User{}, nil)
 				watchChannelData := GetSampleWatchChannelData()
 				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
 				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
@@ -230,6 +228,7 @@ func TestNotificationWebhook(t *testing.T) {
 		"Send a notification for a permission change on a file": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
+				te.mockAPI.On("GetUser", "userId1").Return(&mattermostModel.User{}, nil)
 				watchChannelData := GetSampleWatchChannelData()
 				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
 				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
@@ -274,6 +273,7 @@ func TestNotificationWebhook(t *testing.T) {
 		"Send a notification for a comment on a file": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(te *TestEnvironment) {
+				te.mockAPI.On("GetUser", "userId1").Return(&mattermostModel.User{}, nil)
 				watchChannelData := GetSampleWatchChannelData()
 				mocks.MockKVStore.EXPECT().GetWatchChannelData("userId1").Return(watchChannelData, nil).MaxTimes(2)
 				mocks.MockGoogleClient.EXPECT().NewDriveService(context.Background(), "userId1").Return(mocks.MockGoogleDrive, nil)
@@ -808,6 +808,8 @@ func TestUploadMultipleFiles(t *testing.T) {
 
 func TestCompleteConnectUserToGoogle(t *testing.T) {
 	mocks := GetMockSetup(t)
+	userID := mattermostModel.NewRandomString(26)
+	userID2 := mattermostModel.NewRandomString(26)
 
 	for name, test := range map[string]struct {
 		expectedStatusCode int
@@ -839,19 +841,19 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 		"State token does not match stored token": {
 			expectedStatusCode: http.StatusBadRequest,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate_userId1").Return([]byte("randomState"), nil)
-				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId1").Return(nil)
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate12345_"+userID).Return([]byte("randomState"), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate12345_" + userID).Return(nil)
 			},
 		},
 		"State token does not contain the correct userID": {
 			expectedStatusCode: http.StatusUnauthorized,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate_userId123").Return([]byte("oauthstate_userId123"), nil)
-				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId123").Return(nil)
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate12345_"+userID2).Return([]byte("oauthstate12345_"+userID2), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate12345_" + userID2).Return(nil)
 			},
 			modifyRequest: func(r *http.Request) *http.Request {
 				values := r.URL.Query()
-				values.Set("state", "oauthstate_userId123")
+				values.Set("state", "oauthstate12345_"+userID2)
 				values.Set("code", "oauthcode")
 				r.URL.RawQuery = values.Encode()
 				return r
@@ -860,18 +862,18 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 		"Success complete oauth setup": {
 			expectedStatusCode: http.StatusOK,
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate_userId1").Return([]byte("oauthstate_userId1"), nil)
-				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate_userId1").Return(nil)
+				mocks.MockKVStore.EXPECT().GetOAuthStateToken("oauthstate12345_"+userID).Return([]byte("oauthstate12345_"+userID), nil)
+				mocks.MockKVStore.EXPECT().DeleteOAuthStateToken("oauthstate12345_" + userID).Return(nil)
 				mocks.MockOAuth2.EXPECT().Exchange(ctx, "oauthcode").Return(&oauth2.Token{
 					AccessToken: "accessToken12345",
 					TokenType:   "Bearer",
 					Expiry:      time.Now().Add(time.Hour),
 				}, nil)
-				mocks.MockKVStore.EXPECT().StoreGoogleUserToken("userId1", gomock.Any()).Return(nil)
-				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
+				mocks.MockKVStore.EXPECT().StoreGoogleUserToken(userID, gomock.Any()).Return(nil)
+				te.mockAPI.On("GetDirectChannel", userID, te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
-				mocks.MockTelemetry.EXPECT().TrackUserEvent("account_connected", "userId1", nil)
-				te.mockAPI.On("PublishWebSocketEvent", "google_connect", map[string]interface{}{"connected": true, "google_client_id": "randomstring.apps.googleusercontent.com"}, &mattermostModel.WebsocketBroadcast{OmitUsers: map[string]bool(nil), UserId: "userId1", ChannelId: "", TeamId: "", ConnectionId: "", OmitConnectionId: "", ContainsSanitizedData: false, ContainsSensitiveData: false, ReliableClusterSend: false, BroadcastHooks: []string(nil), BroadcastHookArgs: []map[string]interface{}(nil)}).Times(1)
+				mocks.MockTelemetry.EXPECT().TrackUserEvent("account_connected", userID, nil)
+				te.mockAPI.On("PublishWebSocketEvent", "google_connect", map[string]interface{}{"connected": true, "google_client_id": "randomstring.apps.googleusercontent.com"}, &mattermostModel.WebsocketBroadcast{OmitUsers: map[string]bool(nil), UserId: userID, ChannelId: "", TeamId: "", ConnectionId: "", OmitConnectionId: "", ContainsSanitizedData: false, ContainsSensitiveData: false, ReliableClusterSend: false, BroadcastHooks: []string(nil), BroadcastHookArgs: []map[string]interface{}(nil)}).Times(1)
 			},
 		},
 	} {
@@ -887,8 +889,8 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 			te.plugin.initializeAPI()
 
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodGet, "/complete?code=oauthcode&state=oauthstate_userId1", nil)
-			r.Header.Set("Mattermost-User-ID", "userId1")
+			r := httptest.NewRequest(http.MethodGet, "/complete?code=oauthcode&state=oauthstate12345_"+userID, nil)
+			r.Header.Set("Mattermost-User-ID", userID)
 			ctx, _ := te.plugin.createContext(w, r)
 			if test.modifyRequest != nil {
 				r = test.modifyRequest(r)
