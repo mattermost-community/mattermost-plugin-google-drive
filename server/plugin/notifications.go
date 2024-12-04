@@ -334,6 +334,10 @@ func (p *Plugin) stopDriveActivityNotifications(userID string) string {
 }
 
 func (p *Plugin) handleNotifications(c *plugin.Context, args *mattermostModel.CommandArgs, parameters []string) string {
+	if len(parameters) == 0 {
+		return "Please specify a subcommand: start or stop"
+	}
+
 	subcommand := parameters[0]
 
 	allowedCommands := []string{"start", "stop"}

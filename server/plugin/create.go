@@ -173,6 +173,10 @@ func appendUsersWithoutAccessSlice(config *model.Config, usersWithoutAccess []st
 }
 
 func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parameters []string) string {
+	if len(parameters) == 0 {
+		return "Please specify the type of file you want to create. Use `/google-drive help` for more information."
+	}
+
 	subcommand := parameters[0]
 
 	allowedCommands := []string{"doc", "sheet", "slide"}
