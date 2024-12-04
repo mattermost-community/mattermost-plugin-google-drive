@@ -249,13 +249,13 @@ func (g *Client) GetGoogleUserToken(userID string) (*oauth2package.Token, error)
 		return nil, nil
 	}
 
-	decryptedToken, err := utils.Decrypt([]byte(g.config.EncryptionKey), string(encryptedToken))
+	decryptedToken, err := utils.Decrypt([]byte(g.config.EncryptionKey), encryptedToken)
 	if err != nil {
 		return nil, err
 	}
 
 	var oauthToken oauth2package.Token
-	err = json.Unmarshal([]byte(decryptedToken), &oauthToken)
+	err = json.Unmarshal(decryptedToken, &oauthToken)
 
 	return &oauthToken, err
 }
@@ -343,7 +343,8 @@ func (ds googleServiceBase) checkRateLimits(ctx context.Context) error {
 	return nil
 }
 
-func (g *Client) ReloadRateLimits(newQueriesPerMinute int, newBurstSize int) {
+func (g *Client) ReloadConfigs(newQueriesPerMinute int, newBurstSize int, oauthConfig oauth2.Config) {
+	g.oauthConfig = oauthConfig
 	g.driveLimiter.SetLimit(rate.Limit(newQueriesPerMinute / 60))
 	g.driveLimiter.SetBurst(newBurstSize)
 }

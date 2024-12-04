@@ -16,7 +16,7 @@ type KVStore interface {
 	GetOAuthStateToken(key string) ([]byte, error)
 	DeleteOAuthStateToken(key string) error
 
-	StoreGoogleUserToken(userID, encryptedToken string) error
+	StoreGoogleUserToken(userID string, encryptedToken []byte) error
 	GetGoogleUserToken(userID string) ([]byte, error)
 	DeleteGoogleUserToken(userID string) error
 

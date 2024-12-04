@@ -197,7 +197,7 @@ func (mr *MockKVStoreMockRecorder) ListWatchChannelDataKeys(arg0, arg1 interface
 }
 
 // StoreGoogleUserToken mocks base method.
-func (m *MockKVStore) StoreGoogleUserToken(arg0, arg1 string) error {
+func (m *MockKVStore) StoreGoogleUserToken(arg0 string, arg1 []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StoreGoogleUserToken", arg0, arg1)
 	ret0, _ := ret[0].(error)
