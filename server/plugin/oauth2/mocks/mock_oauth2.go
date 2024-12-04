@@ -9,34 +9,35 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	config "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
 	oauth2 "golang.org/x/oauth2"
 )
 
-// MockConfigInterface is a mock of Config interface.
-type MockConfigInterface struct {
+// MockConfig is a mock of Config interface.
+type MockConfig struct {
 	ctrl     *gomock.Controller
-	recorder *MockConfigInterfaceMockRecorder
+	recorder *MockConfigMockRecorder
 }
 
-// MockConfigInterfaceMockRecorder is the mock recorder for MockConfigInterface.
-type MockConfigInterfaceMockRecorder struct {
-	mock *MockConfigInterface
+// MockConfigMockRecorder is the mock recorder for MockConfig.
+type MockConfigMockRecorder struct {
+	mock *MockConfig
 }
 
-// NewMockConfigInterface creates a new mock instance.
-func NewMockConfigInterface(ctrl *gomock.Controller) *MockConfigInterface {
-	mock := &MockConfigInterface{ctrl: ctrl}
-	mock.recorder = &MockConfigInterfaceMockRecorder{mock}
+// NewMockConfig creates a new mock instance.
+func NewMockConfig(ctrl *gomock.Controller) *MockConfig {
+	mock := &MockConfig{ctrl: ctrl}
+	mock.recorder = &MockConfigMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockConfigInterface) EXPECT() *MockConfigInterfaceMockRecorder {
+func (m *MockConfig) EXPECT() *MockConfigMockRecorder {
 	return m.recorder
 }
 
 // AuthCodeURL mocks base method.
-func (m *MockConfigInterface) AuthCodeURL(arg0 string) string {
+func (m *MockConfig) AuthCodeURL(arg0 string) string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AuthCodeURL", arg0)
 	ret0, _ := ret[0].(string)
@@ -44,13 +45,13 @@ func (m *MockConfigInterface) AuthCodeURL(arg0 string) string {
 }
 
 // AuthCodeURL indicates an expected call of AuthCodeURL.
-func (mr *MockConfigInterfaceMockRecorder) AuthCodeURL(arg0 interface{}) *gomock.Call {
+func (mr *MockConfigMockRecorder) AuthCodeURL(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthCodeURL", reflect.TypeOf((*MockConfigInterface)(nil).AuthCodeURL), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthCodeURL", reflect.TypeOf((*MockConfig)(nil).AuthCodeURL), arg0)
 }
 
 // Exchange mocks base method.
-func (m *MockConfigInterface) Exchange(arg0 context.Context, arg1 string) (*oauth2.Token, error) {
+func (m *MockConfig) Exchange(arg0 context.Context, arg1 string) (*oauth2.Token, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Exchange", arg0, arg1)
 	ret0, _ := ret[0].(*oauth2.Token)
@@ -59,13 +60,25 @@ func (m *MockConfigInterface) Exchange(arg0 context.Context, arg1 string) (*oaut
 }
 
 // Exchange indicates an expected call of Exchange.
-func (mr *MockConfigInterfaceMockRecorder) Exchange(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockConfigMockRecorder) Exchange(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exchange", reflect.TypeOf((*MockConfigInterface)(nil).Exchange), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exchange", reflect.TypeOf((*MockConfig)(nil).Exchange), arg0, arg1)
+}
+
+// ReloadConfig mocks base method.
+func (m *MockConfig) ReloadConfig(arg0 *config.Configuration) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReloadConfig", arg0)
+}
+
+// ReloadConfig indicates an expected call of ReloadConfig.
+func (mr *MockConfigMockRecorder) ReloadConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadConfig", reflect.TypeOf((*MockConfig)(nil).ReloadConfig), arg0)
 }
 
 // TokenSource mocks base method.
-func (m *MockConfigInterface) TokenSource(arg0 context.Context, arg1 *oauth2.Token) oauth2.TokenSource {
+func (m *MockConfig) TokenSource(arg0 context.Context, arg1 *oauth2.Token) oauth2.TokenSource {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TokenSource", arg0, arg1)
 	ret0, _ := ret[0].(oauth2.TokenSource)
@@ -73,7 +86,7 @@ func (m *MockConfigInterface) TokenSource(arg0 context.Context, arg1 *oauth2.Tok
 }
 
 // TokenSource indicates an expected call of TokenSource.
-func (mr *MockConfigInterfaceMockRecorder) TokenSource(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockConfigMockRecorder) TokenSource(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TokenSource", reflect.TypeOf((*MockConfigInterface)(nil).TokenSource), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TokenSource", reflect.TypeOf((*MockConfig)(nil).TokenSource), arg0, arg1)
 }

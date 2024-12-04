@@ -225,6 +225,11 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 	}
 
 	state := r.URL.Query().Get("state")
+	if len(state) == 0 {
+		rErr = errors.New("missing state")
+		http.Error(w, rErr.Error(), http.StatusBadRequest)
+		return
+	}
 
 	stateSlice := strings.Split(state, "_")
 	if len(stateSlice) != 2 {
