@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -102,4 +103,38 @@ func LastN(s string, n int) string {
 	}
 
 	return string(out)
+}
+
+func MarkdownToHTMLEntities(input string) string {
+	replacements := map[rune]string{
+		'!':  "&#33;",  // Exclamation Mark
+		'#':  "&#35;",  // Hash
+		'(':  "&#40;",  // Left Parenthesis
+		')':  "&#41;",  // Right Parenthesis
+		'*':  "&#42;",  // Asterisk
+		'+':  "&#43;",  // Plus Sign
+		'-':  "&#45;",  // Dash
+		'.':  "&#46;",  // Period
+		'/':  "&#47;",  // Forward slash
+		':':  "&#58;",  // Colon
+		'<':  "&#60;",  // Less than
+		'>':  "&#62;",  // Greater Than
+		'[':  "&#91;",  // Left Square Bracket
+		'\\': "&#92;",  // Back slash
+		']':  "&#93;",  // Right Square Bracket
+		'_':  "&#95;",  // Underscore
+		'`':  "&#96;",  // Backtick
+		'|':  "&#124;", // Vertical Bar
+		'~':  "&#126;", // Tilde
+	}
+
+	var builder strings.Builder
+	for _, char := range input {
+		if replacement, exists := replacements[char]; exists {
+			builder.WriteString(replacement)
+		} else {
+			builder.WriteRune(char)
+		}
+	}
+	return builder.String()
 }
