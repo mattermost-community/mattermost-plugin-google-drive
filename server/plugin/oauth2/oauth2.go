@@ -53,3 +53,9 @@ func (oauth2 *ConfigWrapper) AuthCodeURL(state string) string {
 func (oauth2 *ConfigWrapper) TokenSource(ctx context.Context, t *oauth2package.Token) oauth2package.TokenSource {
 	return oauth2.oauth2Config.TokenSource(ctx, t)
 }
+
+// create a function to reload the config
+func (oauth2 *ConfigWrapper) ReloadConfig(config *config.Configuration) {
+	oauth2.oauth2Config.ClientID = config.GoogleOAuthClientID
+	oauth2.oauth2Config.ClientSecret = config.GoogleOAuthClientSecret
+}

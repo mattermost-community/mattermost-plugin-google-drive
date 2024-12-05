@@ -343,7 +343,8 @@ func (ds googleServiceBase) checkRateLimits(ctx context.Context) error {
 	return nil
 }
 
-func (g *Client) ReloadRateLimits(newQueriesPerMinute int, newBurstSize int) {
+func (g *Client) ReloadConfigs(newQueriesPerMinute int, newBurstSize int, oauthConfig oauth2.Config) {
+	g.oauthConfig = oauthConfig
 	g.driveLimiter.SetLimit(rate.Limit(newQueriesPerMinute / 60))
 	g.driveLimiter.SetBurst(newBurstSize)
 }

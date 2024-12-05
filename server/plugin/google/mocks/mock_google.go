@@ -10,7 +10,8 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	google "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/google"
-	oauth2 "golang.org/x/oauth2"
+	oauth2 "github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/oauth2"
+	oauth20 "golang.org/x/oauth2"
 )
 
 // MockClientInterface is a mock of ClientInterface interface.
@@ -37,10 +38,10 @@ func (m *MockClientInterface) EXPECT() *MockClientInterfaceMockRecorder {
 }
 
 // GetGoogleUserToken mocks base method.
-func (m *MockClientInterface) GetGoogleUserToken(arg0 string) (*oauth2.Token, error) {
+func (m *MockClientInterface) GetGoogleUserToken(arg0 string) (*oauth20.Token, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetGoogleUserToken", arg0)
-	ret0, _ := ret[0].(*oauth2.Token)
+	ret0, _ := ret[0].(*oauth20.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -141,14 +142,14 @@ func (mr *MockClientInterfaceMockRecorder) NewSlidesService(arg0, arg1 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewSlidesService", reflect.TypeOf((*MockClientInterface)(nil).NewSlidesService), arg0, arg1)
 }
 
-// ReloadRateLimits mocks base method.
-func (m *MockClientInterface) ReloadRateLimits(arg0, arg1 int) {
+// ReloadConfigs mocks base method.
+func (m *MockClientInterface) ReloadConfigs(arg0, arg1 int, arg2 oauth2.Config) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ReloadRateLimits", arg0, arg1)
+	m.ctrl.Call(m, "ReloadConfigs", arg0, arg1, arg2)
 }
 
-// ReloadRateLimits indicates an expected call of ReloadRateLimits.
-func (mr *MockClientInterfaceMockRecorder) ReloadRateLimits(arg0, arg1 interface{}) *gomock.Call {
+// ReloadConfigs indicates an expected call of ReloadConfigs.
+func (mr *MockClientInterfaceMockRecorder) ReloadConfigs(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadRateLimits", reflect.TypeOf((*MockClientInterface)(nil).ReloadRateLimits), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadConfigs", reflect.TypeOf((*MockClientInterface)(nil).ReloadConfigs), arg0, arg1, arg2)
 }
