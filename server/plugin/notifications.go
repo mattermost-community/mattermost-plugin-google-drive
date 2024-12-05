@@ -67,7 +67,7 @@ func (p *Plugin) handleAddedComment(ctx context.Context, dSrv google.DriveInterf
 }
 
 func (p *Plugin) handleDeletedComment(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
-	urlToComment := file.Name
+	urlToComment := utils.GetHyperlink(file.Name, file.WebViewLink)
 	if len(activity.Targets) != 0 && activity.Targets[0].FileComment != nil && activity.Targets[0].FileComment.LinkToDiscussion != "" {
 		urlToComment = utils.GetHyperlink(file.Name, activity.Targets[0].FileComment.LinkToDiscussion)
 	}
@@ -118,7 +118,7 @@ func (p *Plugin) handleReplyAdded(ctx context.Context, dSrv google.DriveInterfac
 }
 
 func (p *Plugin) handleReplyDeleted(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
-	urlToComment := file.Name
+	urlToComment := utils.GetHyperlink(file.Name, file.WebViewLink)
 	if len(activity.Targets) != 0 && activity.Targets[0].FileComment != nil && activity.Targets[0].FileComment.LinkToDiscussion != "" {
 		urlToComment = utils.GetHyperlink(file.Name, activity.Targets[0].FileComment.LinkToDiscussion)
 	}
@@ -156,7 +156,7 @@ func (p *Plugin) handleReopenedComment(ctx context.Context, dSrv google.DriveInt
 }
 
 func (p *Plugin) handleSuggestionReplyAdded(userID string, activity *driveactivity.DriveActivity, file *drive.File) {
-	urlToComment := file.Name
+	urlToComment := utils.GetHyperlink(file.Name, file.WebViewLink)
 	if len(activity.Targets) != 0 && activity.Targets[0].FileComment != nil && activity.Targets[0].FileComment.LinkToDiscussion != "" {
 		urlToComment = utils.GetHyperlink(file.Name, activity.Targets[0].FileComment.LinkToDiscussion)
 	}
