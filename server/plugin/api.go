@@ -689,21 +689,24 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		// We don't want to spam the user with notifications if there are more than 5 activities.
 		if len(activities) > 5 {
 			p.handleMultipleActivitiesNotification(change.File, userID)
+			lastActivityTime = change.File.ModifiedTime
 		} else {
 			// Newest activity is at the end of the list so iterate through the list in reverse.
 			for i := len(activities) - 1; i >= 0; i-- {
 				activity := activities[i]
 				if activity.PrimaryActionDetail.Comment != nil {
+					lastActivityTime = activity.Timestamp
 					p.handleCommentNotifications(c.Ctx, driveService, change.File, userID, activity)
 				}
 
 				if activity.PrimaryActionDetail.PermissionChange != nil {
+					lastActivityTime = activity.Timestamp
 					p.handleFileSharedNotification(change.File, userID)
 				}
 			}
 		}
 
-		err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ModifiedTime)
+		err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, lastActivityTime)
 		if err != nil {
 			p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
 		}
