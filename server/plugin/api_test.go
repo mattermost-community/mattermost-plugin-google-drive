@@ -331,7 +331,7 @@ func TestNotificationWebhook(t *testing.T) {
 					},
 				}
 				te.mockAPI.On("CreatePost", post).Return(nil, nil).Times(1)
-				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
+				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, activityResponse.Activities[0].Timestamp).Return(nil)
 			},
 		},
 	} {
