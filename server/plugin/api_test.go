@@ -247,10 +247,11 @@ func TestNotificationWebhook(t *testing.T) {
 				mocks.MockKVStore.EXPECT().StoreWatchChannelData("userId1", *watchChannelData).Return(nil)
 				mocks.MockGoogleClient.EXPECT().NewDriveActivityService(context.Background(), "userId1").Return(mocks.MockDriveActivity, nil)
 				mocks.MockKVStore.EXPECT().GetLastActivityForFile("userId1", changeList.Changes[0].File.Id).Return(changeList.Changes[0].File.ModifiedTime, nil)
+				activityResponse := GetSampleDriveactivityPermissionResponse()
 				mocks.MockDriveActivity.EXPECT().Query(context.Background(), &driveactivity.QueryDriveActivityRequest{
 					ItemName: fmt.Sprintf("items/%s", changeList.Changes[0].File.Id),
 					Filter:   "time > \"" + changeList.Changes[0].File.ModifiedTime + "\"",
-				}).Return(GetSampleDriveactivityPermissionResponse(), nil).MaxTimes(1)
+				}).Return(activityResponse, nil).MaxTimes(1)
 				te.mockAPI.On("GetConfig").Return(nil)
 				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				post := &mattermostModel.Post{
@@ -267,7 +268,7 @@ func TestNotificationWebhook(t *testing.T) {
 					},
 				}
 				te.mockAPI.On("CreatePost", post).Return(nil, nil).Times(1)
-				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, changeList.Changes[0].File.ModifiedTime).Return(nil)
+				mocks.MockKVStore.EXPECT().StoreLastActivityForFile("userId1", changeList.Changes[0].File.Id, activityResponse.Activities[0].Timestamp).Return(nil)
 			},
 		},
 		"Send a notification for a comment on a file": {
