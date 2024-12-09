@@ -43,11 +43,15 @@ func (p *Plugin) handleAddedComment(ctx context.Context, dSrv google.DriveInterf
 	if comment.QuotedFileContent != nil {
 		quotedValue = comment.QuotedFileContent.Value
 	}
+
+	quotedValue = utils.MarkdownToHTMLEntities(quotedValue)
+	content := utils.MarkdownToHTMLEntities(comment.Content)
+
 	props := map[string]any{
 		"attachments": []any{
 			map[string]any{
 				"pretext": fmt.Sprintf("%s commented on %s %s", comment.Author.DisplayName, utils.GetInlineImage("File icon:", file.IconLink), utils.GetHyperlink(file.Name, file.WebViewLink)),
-				"text":    fmt.Sprintf("%s\n> %s", quotedValue, comment.Content),
+				"text":    fmt.Sprintf("%s\n> %s", quotedValue, content),
 				"actions": []any{
 					map[string]any{
 						"name": "Reply to comment",
@@ -94,6 +98,10 @@ func (p *Plugin) handleReplyAdded(ctx context.Context, dSrv google.DriveInterfac
 			onBeforeLast = comment.Content
 		}
 	}
+
+	lastReply = utils.MarkdownToHTMLEntities(lastReply)
+	onBeforeLast = utils.MarkdownToHTMLEntities(onBeforeLast)
+
 	props := map[string]any{
 		"attachments": []any{
 			map[string]any{
