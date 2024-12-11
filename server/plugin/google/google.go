@@ -72,11 +72,6 @@ func (g *Client) NewDriveService(ctx context.Context, userID string) (DriveInter
 		return nil, err
 	}
 
-	err = g.driveLimiter.WaitN(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-
 	srv, err := drive.NewService(ctx, option.WithTokenSource(g.oauthConfig.TokenSource(ctx, authToken)))
 	if err != nil {
 		return nil, err
@@ -101,11 +96,6 @@ func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (DriveV2I
 	}
 
 	err = checkKVStoreLimitExceeded(g.kvstore, driveServiceType, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	err = g.driveLimiter.WaitN(ctx, 1)
 	if err != nil {
 		return nil, err
 	}

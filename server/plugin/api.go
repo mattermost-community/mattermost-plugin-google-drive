@@ -503,13 +503,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, userID)
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	clusterService := pluginapi.NewClusterService(p.API)
 	// Mutex to prevent race conditions from multiple requests directed at the same user in a short period of time.
 	m, err := clusterService.NewMutex("drive_watch_notifications_" + userID)
@@ -526,6 +519,13 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 	defer m.Unlock()
+
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, userID)
+	if err != nil {
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// Get the pageToken from the KV store, it has changed since we acquired the lock.
 	watchChannelData, err = p.KVStore.GetWatchChannelData(userID)
