@@ -226,7 +226,8 @@ func (p *Plugin) handleCreate(c *plugin.Context, args *model.CommandArgs, parame
 		Optional:    true,
 	})
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
 	serviceV2, err := p.GoogleClient.NewDriveV2Service(ctx, args.UserId)
 	if err != nil {
 		p.API.LogError("Failed to create drive client", "err", err)

@@ -503,13 +503,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 
-	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, userID)
-	if err != nil {
-		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	clusterService := pluginapi.NewClusterService(p.API)
 	// Mutex to prevent race conditions from multiple requests directed at the same user in a short period of time.
 	m, err := clusterService.NewMutex("drive_watch_notifications_" + userID)
@@ -526,6 +519,13 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		return
 	}
 	defer m.Unlock()
+
+	driveService, err := p.GoogleClient.NewDriveService(c.Ctx, userID)
+	if err != nil {
+		p.API.LogError("Failed to create Google Drive service", "err", err, "userID", userID)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// Get the pageToken from the KV store, it has changed since we acquired the lock.
 	watchChannelData, err = p.KVStore.GetWatchChannelData(userID)
@@ -689,21 +689,24 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		// We don't want to spam the user with notifications if there are more than 5 activities.
 		if len(activities) > 5 {
 			p.handleMultipleActivitiesNotification(change.File, userID)
+			lastActivityTime = change.File.ModifiedTime
 		} else {
 			// Newest activity is at the end of the list so iterate through the list in reverse.
 			for i := len(activities) - 1; i >= 0; i-- {
 				activity := activities[i]
 				if activity.PrimaryActionDetail.Comment != nil {
+					lastActivityTime = activity.Timestamp
 					p.handleCommentNotifications(c.Ctx, driveService, change.File, userID, activity)
 				}
 
 				if activity.PrimaryActionDetail.PermissionChange != nil {
+					lastActivityTime = activity.Timestamp
 					p.handleFileSharedNotification(change.File, userID)
 				}
 			}
 		}
 
-		err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, change.File.ModifiedTime)
+		err = p.KVStore.StoreLastActivityForFile(userID, change.FileId, lastActivityTime)
 		if err != nil {
 			p.API.LogError("Failed to store last activity for file", "err", err, "fileID", change.FileId, "userID", userID)
 		}

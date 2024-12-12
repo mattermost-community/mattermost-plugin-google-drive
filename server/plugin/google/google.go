@@ -49,7 +49,7 @@ const (
 )
 
 func NewGoogleClient(oauthConfig oauth2.Config, config *config.Configuration, kvstore kvstore.KVStore, papi plugin.API) ClientInterface {
-	maximumQueriesPerSecond := config.QueriesPerMinute / 60
+	maximumQueriesPerSecond := float64(config.QueriesPerMinute) / 60
 	burstSize := config.BurstSize
 
 	return &Client{
@@ -68,11 +68,6 @@ func (g *Client) NewDriveService(ctx context.Context, userID string) (DriveInter
 	}
 
 	err = checkKVStoreLimitExceeded(g.kvstore, driveServiceType, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	err = g.driveLimiter.WaitN(ctx, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -101,11 +96,6 @@ func (g *Client) NewDriveV2Service(ctx context.Context, userID string) (DriveV2I
 	}
 
 	err = checkKVStoreLimitExceeded(g.kvstore, driveServiceType, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	err = g.driveLimiter.WaitN(ctx, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +335,6 @@ func (ds googleServiceBase) checkRateLimits(ctx context.Context) error {
 
 func (g *Client) ReloadConfigs(newQueriesPerMinute int, newBurstSize int, oauthConfig oauth2.Config) {
 	g.oauthConfig = oauthConfig
-	g.driveLimiter.SetLimit(rate.Limit(newQueriesPerMinute / 60))
+	g.driveLimiter.SetLimit(rate.Limit(float64(newQueriesPerMinute) / 60))
 	g.driveLimiter.SetBurst(newBurstSize)
 }
