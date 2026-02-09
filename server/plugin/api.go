@@ -388,6 +388,23 @@ func (p *Plugin) handleFileCreation(c *Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Verify user is a member of the channel before creating any files
+	// This check must happen before file creation to prevent orphaned files
+	if request.ChannelId != "" && fileCreationParams.FileAccess != "private" {
+		_, appErr := p.API.GetChannelMember(request.ChannelId, c.UserID)
+		if appErr != nil {
+			c.Log.Warnf("Unauthorized channel access attempt",
+				"userID", c.UserID,
+				"channelID", request.ChannelId,
+				"fileAccess", fileCreationParams.FileAccess)
+			p.writeInteractiveDialogError(w, DialogErrorResponse{
+				Error:      "You are not a member of the specified channel",
+				StatusCode: http.StatusForbidden,
+			})
+			return
+		}
+	}
+
 	var fileCreationErr error
 	createdFileID := ""
 	fileType := r.URL.Query().Get("type")
