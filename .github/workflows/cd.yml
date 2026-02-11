@@ -11,8 +11,9 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   plugin-cd:
-    uses: mattermost/actions-workflows/.github/workflows/plugin-cd.yml@main
+    uses: mattermost/actions-workflows/.github/workflows/plugin-cd.yml@27ec0762e525bd6302ef943f819b91cb13ba1236
     secrets: inherit
