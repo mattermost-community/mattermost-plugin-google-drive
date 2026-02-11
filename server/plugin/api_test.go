@@ -689,7 +689,7 @@ func TestFileCreationEndpoint(t *testing.T) {
 				te.mockAPI.On("CreatePost", post).Return(nil, nil).Times(1)
 			},
 		},
-		"Skip authorization check for private file": {
+		"Private file with channel context": {
 			fileType:           "doc",
 			expectedStatusCode: http.StatusOK,
 			submission: &mattermostModel.SubmitDialogRequest{
@@ -702,7 +702,8 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
-				// No GetChannelMember call should be made for private files
+				// Authorization check is required even for private files when channelId is provided
+				te.mockAPI.On("GetChannelMember", "channelId1", "userId1").Return(&mattermostModel.ChannelMember{}, nil)
 				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
 				doc := GetSampleDoc()
 				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
