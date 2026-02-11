@@ -519,6 +519,7 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("GetChannelMember", "channelId1", "userId1").Return(&mattermostModel.ChannelMember{}, nil).Times(1)
 				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
 				doc := GetSampleDoc()
 				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
@@ -565,6 +566,7 @@ func TestFileCreationEndpoint(t *testing.T) {
 				},
 			},
 			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("GetChannelMember", "channelId1", "userId1").Return(&mattermostModel.ChannelMember{}, nil).Times(1)
 				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
 				doc := GetSampleDoc()
 				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
@@ -615,6 +617,103 @@ func TestFileCreationEndpoint(t *testing.T) {
 					},
 				}
 				te.mockAPI.On("CreatePost", post).Return(nil, nil).Times(1)
+			},
+		},
+		"Unauthorized: user not member of channel with non-private access": {
+			fileType:           "doc",
+			expectedStatusCode: http.StatusForbidden,
+			submission: &mattermostModel.SubmitDialogRequest{
+				ChannelId: "channelId1",
+				Submission: map[string]any{
+					"name":             "file name",
+					"file_access":      "all_comment",
+					"message":          "file message",
+					"share_in_channel": true,
+				},
+			},
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("GetChannelMember", "channelId1", "userId1").Return(nil, &mattermostModel.AppError{
+					Message:    "User is not a member of the channel",
+					StatusCode: http.StatusForbidden,
+				}).Times(1)
+				te.mockAPI.On("LogWarn", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything, mock.AnythingOfType("string"), mock.Anything, mock.AnythingOfType("string"), mock.Anything).Maybe()
+			},
+		},
+		"Authorized: user is member of channel with non-private access": {
+			fileType:           "doc",
+			expectedStatusCode: http.StatusOK,
+			submission: &mattermostModel.SubmitDialogRequest{
+				ChannelId: "channelId1",
+				Submission: map[string]any{
+					"name":             "file name",
+					"file_access":      "all_comment",
+					"message":          "file message",
+					"share_in_channel": true,
+				},
+			},
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				te.mockAPI.On("GetChannelMember", "channelId1", "userId1").Return(&mattermostModel.ChannelMember{
+					ChannelId: "channelId1",
+					UserId:    "userId1",
+				}, nil).Times(1)
+				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
+				doc := GetSampleDoc()
+				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
+					Title: "file name",
+				}).Return(doc, nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil).Times(2)
+				te.mockAPI.On("GetConfig").Return(nil)
+				mocks.MockGoogleDrive.EXPECT().CreatePermission(ctx, doc.DocumentId, &drive.Permission{
+					Role: "commenter",
+					Type: "anyone",
+				}).Return(&drive.Permission{}, nil).MaxTimes(1)
+				file := GetSampleFile(doc.DocumentId)
+				mocks.MockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
+				createdTime, err := time.Parse(time.RFC3339, file.CreatedTime)
+				require.NoError(t, err)
+				post := &mattermostModel.Post{
+					UserId:    te.plugin.BotUserID,
+					ChannelId: "channelId1",
+					Message:   "file message",
+					Props: map[string]any{
+						"attachments": []any{map[string]any{
+							"author_name": file.Owners[0].DisplayName,
+							"author_icon": file.Owners[0].PhotoLink,
+							"title":       file.Name,
+							"title_link":  file.WebViewLink,
+							"footer":      fmt.Sprintf("Google Drive for Mattermost | %s", createdTime),
+							"footer_icon": file.IconLink,
+						}},
+					},
+				}
+				te.mockAPI.On("CreatePost", post).Return(nil, nil).Times(1)
+			},
+		},
+		"Skip authorization check for private file": {
+			fileType:           "doc",
+			expectedStatusCode: http.StatusOK,
+			submission: &mattermostModel.SubmitDialogRequest{
+				ChannelId: "channelId1",
+				Submission: map[string]any{
+					"name":             "file name",
+					"file_access":      "private",
+					"message":          "file message",
+					"share_in_channel": false,
+				},
+			},
+			envSetup: func(ctx context.Context, te *TestEnvironment) {
+				// No GetChannelMember call should be made for private files
+				mocks.MockGoogleClient.EXPECT().NewDocsService(ctx, "userId1").Return(mocks.MockGoogleDocs, nil)
+				doc := GetSampleDoc()
+				mocks.MockGoogleDocs.EXPECT().Create(ctx, &docs.Document{
+					Title: "file name",
+				}).Return(doc, nil)
+				mocks.MockGoogleClient.EXPECT().NewDriveService(ctx, "userId1").Return(mocks.MockGoogleDrive, nil).Times(2)
+				te.mockAPI.On("GetConfig").Return(nil)
+				file := GetSampleFile(doc.DocumentId)
+				mocks.MockGoogleDrive.EXPECT().GetFile(ctx, doc.DocumentId).Return(file, nil)
+				te.mockAPI.On("GetDirectChannel", "userId1", te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "dmChannelId"}, nil).Times(1)
+				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
 			},
 		},
 	} {
