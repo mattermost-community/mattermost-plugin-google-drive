@@ -332,7 +332,7 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 
 	p.Client.Frontend.PublishWebSocketEvent(
 		"google_connect",
-		map[string]interface{}{
+		map[string]any{
 			"connected":        true,
 			"google_client_id": config.GoogleOAuthClientID,
 		},
@@ -365,7 +365,7 @@ func getRawRequestAndFileCreationParams(r *http.Request) (*FileCreationRequest, 
 	if err != nil {
 		return nil, nil, err
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	submission, err := json.Marshal(request.Submission)
 	if err != nil {
@@ -565,12 +565,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 
 	var pageTokenErr error
 	var changes []*drive.Change
-	i := 0
-	for {
-		// Cap this loop at 5 iterations to prevent unbounded calls to the Google Drive API.
-		if i == 5 {
-			break
-		}
+	for range 5 {
 		changeList, changeErr := driveService.ChangesList(c.Ctx, pageToken)
 		if changeErr != nil {
 			p.API.LogError("Failed to fetch Google Drive changes", "err", changeErr, "userID", userID)
@@ -585,7 +580,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			break
 		}
 		pageToken = changeList.NextPageToken
-		i++
 	}
 
 	defer func() {
@@ -670,12 +664,7 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 		}
 
 		var activities []*driveactivity.DriveActivity
-		i = 0
-		for {
-			// Cap this loop at 5 iterations to prevent unbounded calls to the Google Drive Activity API.
-			if i == 5 {
-				break
-			}
+		for range 5 {
 			var activityRes *driveactivity.QueryDriveActivityResponse
 			activityRes, err = activitySrv.Query(c.Ctx, driveActivityQuery)
 			if err != nil {
@@ -696,7 +685,6 @@ func (p *Plugin) handleDriveWatchNotifications(c *Context, w http.ResponseWriter
 			} else {
 				break
 			}
-			i++
 		}
 
 		if len(activities) == 0 {
@@ -739,7 +727,7 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	var request mattermostModel.PostActionIntegrationRequest
 	err = json.Unmarshal(requestData, &request)
 	if err != nil {
@@ -800,7 +788,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request mattermostModel.SubmitDialogRequest
 	err = json.Unmarshal(requestData, &request)
@@ -857,7 +845,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	fileID, ok := request.Submission["fileID"].(string)
 	if !ok || fileID == "" {
@@ -911,7 +899,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	postID := request.State
 	post, appErr := p.API.GetPost(postID)

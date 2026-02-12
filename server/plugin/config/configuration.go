@@ -28,8 +28,8 @@ type Configuration struct {
 	BurstSize               int    `json:"burstsize"`
 }
 
-func (c *Configuration) ToMap() (map[string]interface{}, error) {
-	var out map[string]interface{}
+func (c *Configuration) ToMap() (map[string]any, error) {
+	var out map[string]any
 	data, err := json.Marshal(c)
 	if err != nil {
 		return nil, err
@@ -77,14 +77,14 @@ func (c *Configuration) IsOAuthConfigured() bool {
 	return c.GoogleOAuthClientID != "" && c.GoogleOAuthClientSecret != ""
 }
 
-func (c *Configuration) ClientConfiguration() map[string]interface{} {
-	return map[string]interface{}{}
+func (c *Configuration) ClientConfiguration() map[string]any {
+	return map[string]any{}
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
 // your configuration has reference types.
 func (c *Configuration) Clone() *Configuration {
-	var clone = *c
+	clone := *c
 	return &clone
 }
 

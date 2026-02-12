@@ -13,14 +13,14 @@ const (
 	keysPerPage = 1000
 )
 
-func (p *Plugin) TrackEvent(event string, properties map[string]interface{}) {
+func (p *Plugin) TrackEvent(event string, properties map[string]any) {
 	err := p.tracker.TrackEvent(event, properties)
 	if err != nil {
 		p.Client.Log.Debug("Error sending telemetry event", "event", event, "error", err.Error())
 	}
 }
 
-func (p *Plugin) TrackUserEvent(event, userID string, properties map[string]interface{}) {
+func (p *Plugin) TrackUserEvent(event, userID string, properties map[string]any) {
 	err := p.tracker.TrackUserEvent(event, userID, properties)
 	if err != nil {
 		p.Client.Log.Debug("Error sending user telemetry event", "event", event, "error", err.Error())
@@ -81,7 +81,7 @@ func (p *Plugin) SendDailyTelemetry() {
 		p.Client.Log.Warn("Failed to get the number of connected users for telemetry", "error", err)
 	}
 
-	p.TrackEvent("stats", map[string]interface{}{
+	p.TrackEvent("stats", map[string]any{
 		"connected_user_count": connectedUserCount,
 		"is_oauth_configured":  config.IsOAuthConfigured(),
 	})

@@ -259,7 +259,7 @@ func (p *Plugin) setConfiguration(configuration *config.Configuration) {
 func (p *Plugin) OnConfigurationChange() error {
 	p.ensurePluginAPIClient()
 
-	var configuration = new(config.Configuration)
+	configuration := new(config.Configuration)
 
 	// Load the public configuration fields from the Mattermost server configuration.
 	err := p.Client.Configuration.LoadPluginConfiguration(configuration)
