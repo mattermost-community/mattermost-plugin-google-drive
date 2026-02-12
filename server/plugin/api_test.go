@@ -362,7 +362,7 @@ func TestNotificationWebhook(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer func() { _ = result.Body.Close() }()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}
@@ -743,7 +743,7 @@ func TestFileCreationEndpoint(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer func() { _ = result.Body.Close() }()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}
@@ -822,7 +822,7 @@ func TestUploadFile(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer func() { _ = result.Body.Close() }()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}
@@ -901,7 +901,7 @@ func TestUploadMultipleFiles(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer func() { _ = result.Body.Close() }()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}
@@ -1002,7 +1002,7 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer func() { _ = result.Body.Close() }()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}

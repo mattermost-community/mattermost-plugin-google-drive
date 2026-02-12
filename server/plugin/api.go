@@ -27,6 +27,10 @@ import (
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/utils"
 )
 
+func deferClose(c io.Closer) {
+	_ = c.Close()
+}
+
 // ResponseType indicates type of response returned by api
 type ResponseType string
 
@@ -365,7 +369,7 @@ func getRawRequestAndFileCreationParams(r *http.Request) (*FileCreationRequest, 
 	if err != nil {
 		return nil, nil, err
 	}
-	defer func() { _ = r.Body.Close() }()
+	defer deferClose(r.Body)
 
 	submission, err := json.Marshal(request.Submission)
 	if err != nil {
@@ -727,7 +731,7 @@ func (p *Plugin) openCommentReplyDialog(c *Context, w http.ResponseWriter, r *ht
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	defer func() { _ = r.Body.Close() }()
+	defer deferClose(r.Body)
 	var request mattermostModel.PostActionIntegrationRequest
 	err = json.Unmarshal(requestData, &request)
 	if err != nil {
@@ -788,7 +792,7 @@ func (p *Plugin) handleCommentReplyDialog(c *Context, w http.ResponseWriter, r *
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusInternalServerError})
 		return
 	}
-	defer func() { _ = r.Body.Close() }()
+	defer deferClose(r.Body)
 
 	var request mattermostModel.SubmitDialogRequest
 	err = json.Unmarshal(requestData, &request)
@@ -845,7 +849,7 @@ func (p *Plugin) handleFileUpload(c *Context, w http.ResponseWriter, r *http.Req
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
-	defer func() { _ = r.Body.Close() }()
+	defer deferClose(r.Body)
 
 	fileID, ok := request.Submission["fileID"].(string)
 	if !ok || fileID == "" {
@@ -899,7 +903,7 @@ func (p *Plugin) handleAllFilesUpload(c *Context, w http.ResponseWriter, r *http
 		p.writeInteractiveDialogError(w, DialogErrorResponse{StatusCode: http.StatusBadRequest})
 		return
 	}
-	defer func() { _ = r.Body.Close() }()
+	defer deferClose(r.Body)
 
 	postID := request.State
 	post, appErr := p.API.GetPost(postID)
