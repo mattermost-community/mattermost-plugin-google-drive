@@ -52,7 +52,7 @@ func Encrypt(key []byte, data []byte) ([]byte, error) {
 	}
 
 	sealed := aesgcm.Seal(nil, nonce, data, nil)
-	return encode(append(nonce, sealed...)), nil
+	return encode(append(nonce, sealed...)), nil //nolint:makezero
 }
 
 func Decrypt(key []byte, data []byte) ([]byte, error) {

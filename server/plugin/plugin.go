@@ -12,7 +12,6 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/bot/poster"
-	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry"
 	"github.com/pkg/errors"
 
 	"github.com/mattermost-community/mattermost-plugin-google-drive/server/plugin/config"
@@ -38,9 +37,6 @@ type Plugin struct {
 	configuration     *config.Configuration
 
 	router *mux.Router
-
-	telemetryClient telemetry.Client
-	tracker         telemetry.Tracker
 
 	BotUserID string
 	poster    poster.Poster
@@ -148,7 +144,6 @@ func (p *Plugin) OnActivate() error {
 	}
 
 	p.initializeAPI()
-	p.initializeTelemetry()
 
 	p.oauthBroker = NewOAuthBroker(p.sendOAuthCompleteEvent)
 
@@ -182,9 +177,7 @@ func (p *Plugin) OnActivate() error {
 
 func (p *Plugin) OnDeactivate() error {
 	p.oauthBroker.Close()
-	if err := p.telemetryClient.Close(); err != nil {
-		p.Client.Log.Warn("Telemetry client failed to close", "error", err.Error())
-	}
+
 	if err := p.channelRefreshJob.Close(); err != nil {
 		p.Client.Log.Warn("Channel refresh job failed to close", "error", err.Error())
 	}
@@ -204,10 +197,6 @@ func (p *Plugin) OnInstall(c *plugin.Context, event mattermostModel.OnInstallEve
 	}
 
 	return p.FlowManager.StartSetupWizard(event.UserId)
-}
-
-func (p *Plugin) OnSendDailyTelemetry() {
-	p.SendDailyTelemetry()
 }
 
 func (p *Plugin) OnPluginClusterEvent(c *plugin.Context, ev mattermostModel.PluginClusterEvent) {
@@ -259,7 +248,7 @@ func (p *Plugin) setConfiguration(configuration *config.Configuration) {
 func (p *Plugin) OnConfigurationChange() error {
 	p.ensurePluginAPIClient()
 
-	var configuration = new(config.Configuration)
+	configuration := new(config.Configuration)
 
 	// Load the public configuration fields from the Mattermost server configuration.
 	err := p.Client.Configuration.LoadPluginConfiguration(configuration)
@@ -281,10 +270,6 @@ func (p *Plugin) OnConfigurationChange() error {
 	err = p.Client.SlashCommand.Register(command)
 	if err != nil {
 		return errors.Wrap(err, "failed to register command")
-	}
-	// Some config changes require reloading tracking config
-	if p.tracker != nil {
-		p.tracker.ReloadConfig(telemetry.NewTrackerConfig(p.Client.Configuration.GetConfig()))
 	}
 
 	if p.oauthConfig != nil {

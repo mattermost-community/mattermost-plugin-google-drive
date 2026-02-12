@@ -7,9 +7,7 @@ import (
 	"time"
 )
 
-var (
-	ErrLockTimeout = errors.New("timeout")
-)
+var ErrLockTimeout = errors.New("timeout")
 
 type ClusterMutexMock struct {
 	locked int32

@@ -15,17 +15,11 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/flow"
 )
 
-type Tracker interface {
-	TrackUserEvent(event, userID string, properties map[string]interface{})
-}
-
 type FlowManager struct {
 	client           *pluginapi.Client
 	botUserID        string
 	router           *mux.Router
 	getConfiguration func() *config.Configuration
-
-	tracker Tracker
 
 	setupFlow        *flow.Flow
 	oauthFlow        *flow.Flow
@@ -38,8 +32,6 @@ func (p *Plugin) NewFlowManager() *FlowManager {
 		botUserID:        p.BotUserID,
 		router:           p.router,
 		getConfiguration: p.getConfiguration,
-
-		tracker: p,
 	}
 
 	fm.setupFlow = fm.newFlow("setup").WithSteps(
@@ -63,11 +55,7 @@ func (p *Plugin) NewFlowManager() *FlowManager {
 func (fm *FlowManager) doneStep() flow.Step {
 	return flow.NewStep(stepDone).
 		WithText(":tada: You've successfully setup Google Drive Plugin.").
-		OnRender(fm.onDone).Terminal()
-}
-
-func (fm *FlowManager) onDone(f *flow.Flow) {
-	fm.trackCompleteSetupWizard(f.UserID)
+		Terminal()
 }
 
 func (fm *FlowManager) newFlow(name flow.Name) *flow.Flow {
@@ -141,22 +129,7 @@ func (fm *FlowManager) StartSetupWizard(userID string) error {
 
 	fm.client.Log.Debug("Started setup wizard", "userID", userID)
 
-	fm.trackStartSetupWizard(userID, false)
-
 	return nil
-}
-
-func (fm *FlowManager) trackStartSetupWizard(userID string, fromInvite bool) {
-	fm.tracker.TrackUserEvent("setup_wizard_start", userID, map[string]interface{}{
-		"from_invite": fromInvite,
-		"time":        model.GetMillis(),
-	})
-}
-
-func (fm *FlowManager) trackCompleteSetupWizard(userID string) {
-	fm.tracker.TrackUserEvent("setup_wizard_complete", userID, map[string]interface{}{
-		"time": model.GetMillis(),
-	})
 }
 
 func (fm *FlowManager) StartOauthWizard(userID string) error {
@@ -167,21 +140,7 @@ func (fm *FlowManager) StartOauthWizard(userID string) error {
 		return err
 	}
 
-	fm.trackStartOauthWizard(userID)
-
 	return nil
-}
-
-func (fm *FlowManager) trackStartOauthWizard(userID string) {
-	fm.tracker.TrackUserEvent("oauth_wizard_start", userID, map[string]interface{}{
-		"time": model.GetMillis(),
-	})
-}
-
-func (fm *FlowManager) trackCompleteOauthWizard(userID string) {
-	fm.tracker.TrackUserEvent("oauth_wizard_complete", userID, map[string]interface{}{
-		"time": model.GetMillis(),
-	})
 }
 
 func (fm *FlowManager) stepWelcome() flow.Step {
@@ -204,7 +163,8 @@ func (fm *FlowManager) stepOAuthInfo() flow.Step {
 ##### :white_check_mark: Step 1: Register an OAuth Application in Google Cloud Console
 You must first register the Mattermost Google Drive Plugin as an authorized OAuth app.`
 	oauthMessage := fmt.Sprintf(
-		"1. Create a new Project. You would need to redirect to [Google Cloud Console](https://console.cloud.google.com/home/dashboard) and select the option to **New project**. Then, select the name and the organization (optional).\n"+
+		"1. Create a new Project. You would need to redirect to [Google Cloud Console](https://console.cloud.google.com/home/dashboard) and select the option to **New project**. Then, select the name and the organization (optional).\n"+ //nolint:unqueryvet
+
 			"2. Select APIs. After creating a project, on the left side menu on **APIs & Services**, then, select the first option **Enabled APIs & Services** and wait, the page will redirect.\n"+
 			"3. Click on **Enable APIs and Services** option. Once you are in the API Library, search and enable following APIs:\n"+
 			"	- Google Drive API\n"+
@@ -261,7 +221,7 @@ func (fm *FlowManager) stepOAuthInput() flow.Step {
 		WithButton(cancelButton())
 }
 
-func (fm *FlowManager) submitOAuthConfig(f *flow.Flow, submitted map[string]interface{}) (flow.Name, flow.State, map[string]string, error) {
+func (fm *FlowManager) submitOAuthConfig(f *flow.Flow, submitted map[string]any) (flow.Name, flow.State, map[string]string, error) {
 	errorList := map[string]string{}
 
 	clientIDRaw, ok := submitted["client_id"]
@@ -315,7 +275,6 @@ func (fm *FlowManager) stepOAuthConnect() flow.Step {
 	return flow.NewStep(stepOAuthConnect).
 		WithText(connectText).
 		WithPretext(connectPretext).
-		OnRender(func(f *flow.Flow) { fm.trackCompleteOauthWizard(f.UserID) }).
 		Next("")
 }
 
@@ -327,15 +286,7 @@ func (fm *FlowManager) StartAnnouncementWizard(userID string) error {
 		return err
 	}
 
-	fm.trackStartAnnouncementWizard(userID)
-
 	return nil
-}
-
-func (fm *FlowManager) trackStartAnnouncementWizard(userID string) {
-	fm.tracker.TrackUserEvent("announcement_wizard_start", userID, map[string]interface{}{
-		"time": model.GetMillis(),
-	})
 }
 
 func (fm *FlowManager) stepAnnouncementQuestion() flow.Step {
@@ -380,11 +331,10 @@ func (fm *FlowManager) stepAnnouncementQuestion() flow.Step {
 func (fm *FlowManager) stepAnnouncementConfirmation() flow.Step {
 	return flow.NewStep(stepAnnouncementConfirmation).
 		WithText("Message to ~{{ .ChannelName }} was sent.").
-		Next("").
-		OnRender(func(f *flow.Flow) { fm.trackCompleteAnnouncementWizard(f.UserID) })
+		Next("")
 }
 
-func (fm *FlowManager) submitChannelAnnouncement(f *flow.Flow, submitted map[string]interface{}) (flow.Name, flow.State, map[string]string, error) {
+func (fm *FlowManager) submitChannelAnnouncement(f *flow.Flow, submitted map[string]any) (flow.Name, flow.State, map[string]string, error) {
 	channelIDRaw, ok := submitted["channel_id"]
 	if !ok {
 		return "", nil, nil, errors.New("channel_id missing")
@@ -421,10 +371,4 @@ func (fm *FlowManager) submitChannelAnnouncement(f *flow.Flow, submitted map[str
 	return stepAnnouncementConfirmation, flow.State{
 		"ChannelName": channel.Name,
 	}, nil, nil
-}
-
-func (fm *FlowManager) trackCompleteAnnouncementWizard(userID string) {
-	fm.tracker.TrackUserEvent("announcement_wizard_complete", userID, map[string]interface{}{
-		"time": model.GetMillis(),
-	})
 }
