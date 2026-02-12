@@ -332,8 +332,6 @@ func (p *Plugin) completeConnectUserToGoogle(c *Context, w http.ResponseWriter, 
 
 	p.createBotDMPost(userID, message, nil)
 
-	p.TrackUserEvent("account_connected", userID, nil)
-
 	p.Client.Frontend.PublishWebSocketEvent(
 		"google_connect",
 		map[string]any{

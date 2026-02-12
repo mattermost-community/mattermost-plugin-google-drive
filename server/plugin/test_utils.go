@@ -44,7 +44,6 @@ type MockSetup struct {
 	MockClusterMutex  *mock_pluginapi.MockClusterMutex
 	MockCluster       *mock_pluginapi.MockCluster
 	MockOAuth2        *mock_oauth2.MockConfig
-	MockTelemetry     *mock_pluginapi.MockTracker
 }
 
 func SetupTestEnvironment(t *testing.T) *TestEnvironment {
@@ -94,7 +93,6 @@ func GetMockSetup(t *testing.T) *MockSetup {
 		MockClusterMutex:  mock_pluginapi.NewMockClusterMutex(ctrl),
 		MockCluster:       mock_pluginapi.NewMockCluster(ctrl),
 		MockOAuth2:        mock_oauth2.NewMockConfig(ctrl),
-		MockTelemetry:     mock_pluginapi.NewMockTracker(ctrl),
 	}
 }
 
