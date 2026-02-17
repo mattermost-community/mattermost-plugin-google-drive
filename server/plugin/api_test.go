@@ -362,7 +362,7 @@ func TestNotificationWebhook(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer result.Body.Close()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}
@@ -743,7 +743,7 @@ func TestFileCreationEndpoint(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer result.Body.Close()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}
@@ -822,7 +822,7 @@ func TestUploadFile(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer result.Body.Close()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}
@@ -901,7 +901,7 @@ func TestUploadMultipleFiles(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer result.Body.Close()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}
@@ -973,8 +973,7 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 				mocks.MockKVStore.EXPECT().StoreGoogleUserToken(userID, gomock.Any()).Return(nil)
 				te.mockAPI.On("GetDirectChannel", userID, te.plugin.BotUserID).Return(&mattermostModel.Channel{Id: "channelId1"}, nil).Times(1)
 				te.mockAPI.On("CreatePost", mock.Anything).Return(nil, nil).Times(1)
-				mocks.MockTelemetry.EXPECT().TrackUserEvent("account_connected", userID, nil)
-				te.mockAPI.On("PublishWebSocketEvent", "google_connect", map[string]interface{}{"connected": true, "google_client_id": "randomstring.apps.googleusercontent.com"}, &mattermostModel.WebsocketBroadcast{OmitUsers: map[string]bool(nil), UserId: userID, ChannelId: "", TeamId: "", ConnectionId: "", OmitConnectionId: "", ContainsSanitizedData: false, ContainsSensitiveData: false, ReliableClusterSend: false, BroadcastHooks: []string(nil), BroadcastHookArgs: []map[string]interface{}(nil)}).Times(1)
+				te.mockAPI.On("PublishWebSocketEvent", "google_connect", map[string]any{"connected": true, "google_client_id": "randomstring.apps.googleusercontent.com"}, &mattermostModel.WebsocketBroadcast{OmitUsers: map[string]bool(nil), UserId: userID, ChannelId: "", TeamId: "", ConnectionId: "", OmitConnectionId: "", ContainsSanitizedData: false, ContainsSensitiveData: false, ReliableClusterSend: false, BroadcastHooks: []string(nil), BroadcastHookArgs: []map[string]any(nil)}).Times(1)
 			},
 		},
 	} {
@@ -986,7 +985,6 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 			te.plugin.KVStore = mocks.MockKVStore
 			te.plugin.GoogleClient = mocks.MockGoogleClient
 			te.plugin.oauthConfig = mocks.MockOAuth2
-			te.plugin.tracker = mocks.MockTelemetry
 			te.plugin.initializeAPI()
 
 			w := httptest.NewRecorder()
@@ -1002,7 +1000,7 @@ func TestCompleteConnectUserToGoogle(t *testing.T) {
 
 			result := w.Result()
 			require.NotNil(t, result)
-			defer result.Body.Close()
+			defer deferClose(result.Body)
 			assert.Equal(test.expectedStatusCode, result.StatusCode)
 		})
 	}

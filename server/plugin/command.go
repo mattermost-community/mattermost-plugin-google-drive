@@ -230,7 +230,6 @@ func (p *Plugin) handleSetup(c *plugin.Context, args *model.CommandArgs, paramet
 	}
 
 	err = p.FlowManager.StartSetupWizard(userID)
-
 	if err != nil {
 		return err.Error()
 	}
